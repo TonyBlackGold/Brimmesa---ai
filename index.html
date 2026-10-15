@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2f5d3a"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg"><link rel="apple-touch-icon" href="icon-192.png">
+<title>BRIMMESA AI · Voice Coach (prototype)</title>
+<style>
+:root{--g:#2f5d3a;--gold:#c9a24a;--bg:#f7f4ec}
+body{font-family:system-ui,sans-serif;background:var(--bg);margin:0;color:#222}
+header{background:var(--g);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+header b{color:var(--gold)} #stats span{margin-left:12px}
+main{max-width:760px;margin:auto;padding:12px}
+#log{background:#fff;border-radius:12px;padding:12px;height:52vh;overflow:auto;box-shadow:0 1px 4px #0002}
+.l{margin:8px 0;display:flex;gap:8px;align-items:flex-start}.av{width:34px;height:34px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex:none}
+.l.user{flex-direction:row-reverse}.l.user .t{background:#e6efe7}.t{background:#f1ede2;padding:8px 10px;border-radius:10px}
+.t small{display:block;color:#666;font-size:11px}
+#ctl{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap}button{border:0;border-radius:10px;padding:10px 14px;background:var(--g);color:#fff;cursor:pointer}
+button.alt{background:#fff;color:var(--g);border:1px solid var(--g)} #mic.on{background:#b33}
+#txt{flex:1;min-width:180px;padding:10px;border-radius:10px;border:1px solid #ccc}
+#acts button{margin:4px 4px 0 0} #note{font-size:12px;color:#555} dialog{max-width:640px}
+@media (max-width:700px){main{padding:8px}#log{height:48vh}header{padding:10px}}
+button{min-height:48px;font-size:16px}#txt{font-size:16px;min-height:48px}
+#mic{flex:1 1 100%;min-height:72px;font-size:20px} #acts button{min-height:48px}
+label{display:inline-block;padding:8px 0;font-size:15px} input[type=checkbox]{width:22px;height:22px;vertical-align:middle}
+</style></head><body>
+<header><div><b>BRIMMESA</b> AI · voice coach <small>(prototype)</small></div>
+<div id="stats"></div></header>
+<main>
+<div id="log" aria-live="polite"></div>
+<div id="ctl">
+  <button id="mic">🎤 Tap to talk</button>
+  <input id="txt" placeholder="Or type here and press Enter">
+  <button id="start" class="alt">▶ Start session</button>
+</div>
+<div id="acts"></div>
+<p>
+  <label><input type="checkbox" id="drive"> Driving mode (short, audio only)</label> ·
+  <label><input type="checkbox" id="auto" checked> Hands-free (keep listening)</label> ·
+  <button class="alt" id="hist">Progress &amp; history</button>
+</p>
+<p id="note"></p>
+</main>
+<dialog id="dlg"><h3>Your progress &amp; history</h3><div id="dlgbody"></div>
+<p><small>Privacy: no audio is recorded or stored. Speech is converted to text by your browser, and only progress and short session summaries are saved, on this device only (localStorage).</small></p>
+<button id="clear">Clear all history &amp; progress</button> <button class="alt" id="close">Close</button></dialog>
+<script src="engine.js"></script><script src="app.js"></script>
+<script>if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});</script>
+</body></html>

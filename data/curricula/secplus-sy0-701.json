@@ -1,0 +1,22 @@
+{
+  "id": "secplus-701", "skill": "secplus", "cert": "CompTIA Security+", "examCode": "SY0-701",
+  "disclaimer": "Original practice content by BRIMMESA. Not affiliated with or endorsed by CompTIA. Not actual exam questions.",
+  "domains": [
+    { "id": "1.0", "name": "General Security Concepts", "weight": 12 },
+    { "id": "2.0", "name": "Threats, Vulnerabilities, and Mitigations", "weight": 22 },
+    { "id": "3.0", "name": "Security Architecture", "weight": 18 },
+    { "id": "4.0", "name": "Security Operations", "weight": 28 },
+    { "id": "5.0", "name": "Security Program Management and Oversight", "weight": 20 }
+  ],
+  "lessonSize": 4,
+  "items": [
+    { "id": "q1", "domain": "1.0", "teach": "The CIA triad is confidentiality, integrity, and availability.", "q": "A hospital's records system goes offline during a power outage. Which part of the CIA triad was affected?", "accept": ["availability", "available"], "explain": "Availability. The data wasn't changed or exposed. It just couldn't be reached." },
+    { "id": "q2", "domain": "1.0", "teach": "Hashing produces a fixed-length fingerprint used to check integrity. Encryption is reversible with a key.", "q": "You download a file and compare its SHA-256 value to the one on the website. What property are you checking?", "accept": ["integrity"], "explain": "Integrity. Matching hashes show the file wasn't altered." },
+    { "id": "q3", "domain": "2.0", "teach": "Phishing uses fake messages to trick people. Spear phishing targets one specific person or group.", "q": "An attacker emails only the finance team a fake invoice that uses their manager's name. What is this attack called?", "accept": ["spear phishing", "spear-phishing", "spearphishing", "whaling", "bec", "business email compromise"], "explain": "Spear phishing: a targeted phishing attack. If it targeted an executive, it would be whaling." },
+    { "id": "q4", "domain": "2.0", "teach": "Ransomware encrypts victims' files and demands payment for the key.", "q": "Files across a company suddenly become unreadable, and a note demands cryptocurrency. What type of malware is this?", "accept": ["ransomware", "ransom"], "explain": "Ransomware. Offline, tested backups are the key mitigation." },
+    { "id": "q5", "domain": "3.0", "teach": "Network segmentation splits a network into zones so a breach in one zone doesn't spread easily.", "q": "A store puts its card-payment systems on a separate VLAN from guest Wi-Fi. What security concept is this?", "accept": ["segmentation", "segment", "isolation", "vlan", "zon"], "explain": "Network segmentation. It limits lateral movement and narrows compliance scope." },
+    { "id": "q6", "domain": "4.0", "teach": "Multifactor authentication combines something you know, something you have, and something you are.", "q": "A login asks for a password and then a code from an authenticator app. What is this called?", "accept": ["mfa", "multi factor", "multifactor", "multi-factor", "two factor", "2fa", "two-factor"], "explain": "Multifactor authentication: something you know plus something you have." },
+    { "id": "q7", "domain": "4.0", "teach": "Incident response phases: preparation, detection, analysis, containment, eradication, recovery, lessons learned.", "q": "After isolating an infected laptop from the network, which incident response phase did you just perform?", "accept": ["containment", "contain"], "explain": "Containment. Stop the spread before eradication and recovery." },
+    { "id": "q8", "domain": "5.0", "teach": "Risk responses: accept, avoid, transfer, mitigate. Buying insurance transfers risk.", "q": "A company buys cyber insurance to cover breach costs. Which risk response is this?", "accept": ["transfer", "transference", "sharing", "share"], "explain": "Risk transference. Part of the financial impact moves to the insurer." }
+  ]
+}

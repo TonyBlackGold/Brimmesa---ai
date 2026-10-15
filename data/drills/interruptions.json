@@ -1,0 +1,16 @@
+{
+  "id": "interruptions", "skill": "comm.interruptions",
+  "intro": "Team meeting drill. You're presenting your plan to cut delivery times. Marcus tends to interrupt. Hold your ground calmly: acknowledge him, keep control, and finish your point. Start by giving your first point.",
+  "characters": [ { "id": "marcus", "name": "Marcus", "trait": "impatient, talks over people", "voice": { "pitch": 0.75, "rate": 1.15, "index": 3 } } ],
+  "rounds": [
+    { "speaker": "marcus", "text": "Sorry, sorry, before you go on, we tried that last year and it flopped." },
+    { "speaker": "marcus", "text": "Yeah but who's paying for this? Can we just skip to the budget?" },
+    { "speaker": "marcus", "text": "Honestly I think we're overcomplicating this whole thing." }
+  ],
+  "rubric": [
+    { "id": "acknowledge", "label": "Acknowledged the interruption", "points": 30, "words": ["i hear", "good point", "fair", "i understand", "i appreciate", "thanks", "great question", "noted", "i get that", "that's a"], "tip": "Briefly acknowledge first, like 'Fair point, Marcus.' That takes the heat out." },
+    { "id": "redirect", "label": "Kept control and redirected", "points": 40, "words": ["let me finish", "i'll get to", "hold that", "in a moment", "after i", "let me", "i'd like to finish", "come back to", "one second", "park that", "first"], "tip": "Hold your spot: 'Let me finish this point, then I'll cover the budget.'" },
+    { "id": "concise", "label": "Stayed concise (under 35 words)", "points": 30, "maxWords": 35, "tip": "Short answers sound composed. Rambling sounds defensive." }
+  ],
+  "penalties": [ { "id": "hostile", "label": "Hostile tone", "points": 30, "words": ["shut up", "stupid", "whatever", "stop interrupting me", "be quiet", "you always"], "tip": "Stay calm. Hostility loses the room even when you're right." } ]
+}

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "coach": { "id": "coach", "name": "Coach Amara", "voice": { "pitch": 1.0, "rate": 1.0, "prefer": ["female", "Samantha", "Google US English"] } },
+  "worlds": [
+    { "id": "social", "title": "Social Confidence & Dating", "activities": [
+      { "id": "spice-aisle", "type": "scenario", "file": "data/scenarios/spice-aisle.json", "title": "Grocery spice aisle", "keywords": ["social", "grocery", "spice", "dating", "flirt", "women", "conversation scenario"], "driving": false } ] },
+    { "id": "communication", "title": "Communication Mastery", "activities": [
+      { "id": "interruptions", "type": "drill", "file": "data/drills/interruptions.json", "title": "Handling interruptions", "keywords": ["communication", "interrupt", "interruption", "composure", "meeting", "coaching"], "driving": true } ] },
+    { "id": "secplus", "title": "CompTIA Security+ Academy", "activities": [
+      { "id": "secplus-701", "type": "quiz", "file": "data/curricula/secplus-sy0-701.json", "title": "Security+ SY0-701 lesson", "keywords": ["security", "security plus", "security+", "comptia", "cyber", "cert", "exam", "quiz", "lesson"], "driving": true } ] }
+  ]
+}

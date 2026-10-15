@@ -1,0 +1,41 @@
+{
+  "id": "spice-aisle", "skill": "social.approach",
+  "setting": "You're in the spice aisle of a grocery store on a Saturday afternoon. Two adult women are shopping together. Jasmine, the one holding a jar of smoked paprika, makes eye contact and smiles. Her friend Renee is reading a recipe on her phone. Say whatever you'd naturally say.",
+  "characters": [
+    { "id": "jasmine", "name": "Jasmine", "trait": "warm, playful, curious", "voice": { "pitch": 1.25, "rate": 1.05, "index": 1 } },
+    { "id": "renee", "name": "Renee", "trait": "dry humor, a bit guarded at first", "voice": { "pitch": 0.85, "rate": 0.95, "index": 2 } }
+  ],
+  "maxTurns": 5,
+  "signals": {
+    "greeting": ["hi", "hello", "hey", "good afternoon", "how's it going", "how are you"],
+    "context": ["spice", "paprika", "cumin", "recipe", "cook", "cooking", "dinner", "season", "flavor", "taco", "chili", "curry", "jar", "smoked"],
+    "question": ["?", "what", "how", "which", "do you", "have you", "would you", "any recommend", "recommend"],
+    "intro": ["my name", "i'm ", "i am ", "name's"],
+    "humor": ["haha", "joke", "dangerous", "trouble", "addicted", "funny", "lol", "confession", "honestly"],
+    "inclusive": ["you two", "both of you", "y'all", "you guys", "your friend", "renee"],
+    "pushy": ["number", "sexy", "hot", "body", "come with me", "date me", "why not", "come on"],
+    "exit": ["nice meeting", "nice to meet", "have a good", "enjoy", "see you", "take care", "i'll let you", "bye"]
+  },
+  "responses": {
+    "open_good": [ { "speaker": "jasmine", "text": "Ha, hi! Okay, honest opinion: smoked paprika or regular? We're making chili tonight." }, { "speaker": "renee", "text": "She's been holding that jar for five minutes. Help us." } ],
+    "open_flat": [ { "speaker": "jasmine", "text": "Oh, hi." }, { "speaker": "renee", "text": "...Can we help you find something?" } ],
+    "context": [ { "speaker": "jasmine", "text": "See, Renee? Somebody who knows spices." }, { "speaker": "renee", "text": "Fine, I'll allow it. What's your secret ingredient then?" } ],
+    "question": [ { "speaker": "jasmine", "text": "Good question! Mostly my grandma's recipe, but I always add a little cinnamon." }, { "speaker": "renee", "text": "Which I still think is weird." } ],
+    "humor": [ { "speaker": "renee", "text": "Okay, that was actually funny." }, { "speaker": "jasmine", "text": "Told you this aisle has the best people." } ],
+    "intro": [ { "speaker": "jasmine", "text": "Nice to meet you! I'm Jasmine, and this is Renee." }, { "speaker": "renee", "text": "Hi. She introduces me before I can, every time." } ],
+    "inclusive": [ { "speaker": "renee", "text": "Look at that, somebody included me. I'm warming up to you." } ],
+    "pushy": [ { "speaker": "renee", "text": "Okay, that's a little much. We're just shopping." }, { "speaker": "jasmine", "text": "Yeah... we should probably get going." } ],
+    "neutral": [ { "speaker": "jasmine", "text": "Mm-hm." }, { "speaker": "renee", "text": "So... anyway." } ],
+    "exit": [ { "speaker": "jasmine", "text": "You too! Enjoy your cooking." }, { "speaker": "renee", "text": "Good luck with the cumin. Bye!" } ],
+    "timeout": [ { "speaker": "jasmine", "text": "Well, we've got to finish shopping. It was fun chatting!" } ]
+  },
+  "rubric": [
+    { "id": "greeting", "label": "Friendly opener", "points": 15, "tip": "Open with a simple, relaxed greeting." },
+    { "id": "context", "label": "Used the situation (the spices, the recipe)", "points": 20, "tip": "Mention something you both share right now, like the paprika. It feels natural, not like a line." },
+    { "id": "question", "label": "Asked open questions", "points": 20, "tip": "Ask an open question so they can talk too." },
+    { "id": "inclusive", "label": "Included both people", "points": 15, "tip": "With two people, bring the friend in too. Ignoring her makes it awkward for both of them." },
+    { "id": "humor", "label": "Light humor", "points": 10, "tip": "A little self-aware humor lowers the pressure." },
+    { "id": "exit", "label": "Graceful exit", "points": 20, "tip": "End warmly while the energy is good. A polite exit is confident." }
+  ],
+  "penalties": [ { "id": "pushy", "label": "Pushy or appearance-focused remark", "points": 30, "tip": "Skip pushy or physical comments. Respect and comfort come first, and you'll be more attractive for it." } ]
+}

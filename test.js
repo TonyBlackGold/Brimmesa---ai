@@ -1,0 +1,41 @@
+// Headless end-to-end test of the six prototype requirements: node test.js
+const fs = require('fs'), assert = require('assert');
+const { Engine, newProfile, level } = require('./engine.js');
+const worlds = JSON.parse(fs.readFileSync('data/worlds.json'));
+const content = {}; worlds.worlds.forEach(w => w.activities.forEach(a => content[a.id] = JSON.parse(fs.readFileSync(a.file))));
+let clock = Date.parse('2026-10-14T15:00:00Z'); const now = () => clock;
+const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:', t); r.forEach(l => console.log(`  ${l.speaker.toUpperCase()}: ${l.text}`)); return r; };
+(async () => {
+  let e = new Engine({ worlds, content, profile: newProfile(), now });
+  console.log('1) welcome'); e.welcome().forEach(l => console.log('  COACH:', l.text));
+  await say(e, "call me Tony");
+  assert.equal(e.p.name, 'Tony');
+  console.log('3) two-character social scenario');
+  await say(e, "let's do the social grocery one");
+  await say(e, "Hey! Honestly that smoked paprika is dangerous, I put it in everything");
+  await say(e, "I'm Tony by the way. What are you two cooking?");
+  const r = await say(e, "Cinnamon in chili, I'll try it. Nice meeting you both, enjoy!");
+  assert(r.some(l => l.speaker === 'jasmine') && e.p.mastery['social.approach'].best >= 80);
+  console.log('4) communication drill');
+  await say(e, "communication"); await say(e, "First point: we route by zip code.");
+  await say(e, "Fair point Marcus. Let me finish this point, then I'll cover last year.");
+  await say(e, "Great question, I'll get to the budget in a moment.");
+  await say(e, "I hear you. Let me finish, it's simpler than it sounds.");
+  assert(e.p.mastery['comm.interruptions'].best >= 90);
+  console.log('5) Security+ lesson'); await say(e, "security plus");
+  const ans = { q1: 'availability', q2: 'integrity', q3: 'spear phishing', q4: "I don't know", q5: 'segmentation', q6: 'mfa', q7: 'containment', q8: 'transfer' };
+  for (let i = 0; i < 4; i++) await say(e, ans[e.s.order[i].id]);
+  assert(e.p.mastery.secplus.attempts === 1);
+  console.log('2) persistence + memory of progress (new session from saved JSON, next day)');
+  const saved = JSON.stringify(e.p); clock += 86400000;
+  e = new Engine({ worlds, content, profile: JSON.parse(saved), now });
+  const w = e.welcome(); w.forEach(l => console.log('  COACH:', l.text));
+  assert(/Welcome back, Tony/.test(w[0].text) && /Last time/.test(w[0].text));
+  await say(e, "security"); // missed items should come first
+  console.log('  first item after review prioritization:', e.s.order[0].id);
+  await say(e, "change subject"); assert.equal(e.mode, 'menu');
+  await say(e, "I'm driving"); const d = await say(e, "social"); assert(/parked/.test(d[0].text));
+  console.log('6) XP/progress:', e.progressSummary(), '| level', level(e.p.xp));
+  assert(e.p.xp > 0 && e.p.streak === 2 && e.p.history.length === 3);
+  console.log('\nALL TESTS PASSED');
+})().catch(err => { console.error('FAIL', err); process.exit(1); });
