@@ -251,6 +251,97 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
     assert(/rejected that key/.test(await llm.testConnection('typed-once')));
     assert.equal(llm.getKey(), SECRET);
   }
+  {
+    const { state } = brain({
+      fetchImpl: async () => ({ ok: true, status: 200, json: async () => gemini({ lines: [{ speaker: 'coach', text: 'Brimmesa is the name.', emotion: 'smile' }] }) })
+    });
+    const eng = new Engine({ worlds, content, profile: newProfile(), areas, provider: createLLMProvider({
+      enabled: true,
+      getKey: () => SECRET,
+      getCast: () => cast,
+      now: fixedNow,
+      readUsage: () => ({ day: '', count: 0 }),
+      writeUsage() {},
+      readMemory: () => [],
+      writeMemory() {},
+      fetchImpl: async (url, req) => {
+        state.calls.push({ url, req });
+        return { ok: true, status: 200, json: async () => gemini({ lines: [{ speaker: 'coach', text: 'Here with you.', emotion: 'smile' }] }) };
+      }
+    }), now: fixedNow });
+    await eng.handle('tell me something useful');
+    const prompt = JSON.parse(state.calls[0].req.body).contents[0].parts[0].text;
+    assert(prompt.includes('Write the brand as Brimmesa'));
+    assert(!prompt.includes('BRIMMESA'));
+  }
+
+  console.log('8) speech pronunciation and Gemini TTS');
+  const speech = require('./speech.js');
+  assert.equal(speech.pronounce('Welcome to BRIMMESA AI.', 'word'), 'Welcome to Brimmesa AI.');
+  assert.equal(speech.pronounce('brimmesa', 'word'), 'Brimmesa');
+  assert.equal(speech.spokenText('BRIMMESA', 'gemini'), 'Brimmesa');
+  assert.equal(speech.spokenText('BRIMMESA', 'basic'), 'Brih-meh-sah');
+  assert.equal(speech.browserSpells({ name: 'Google US English' }), false);
+  assert.equal(speech.browserSpells({ name: 'Fred' }), true);
+  assert.deepEqual(speech.sentences('Hello there. How are you?'), ['Hello there.', 'How are you?']);
+  const fitted = speech.fitWords('Hi Brimmesa', 1000);
+  assert.equal(fitted.words.join(' '), 'Hi Brimmesa');
+  assert(fitted.wtimes[0] === 0 && fitted.wdurations.reduce((a, b) => a + b, 0) >= 1000);
+  const wav = speech.encodeWav(new Uint8Array(48), 24000);
+  const parsed = speech.parseWav(wav);
+  assert.equal(parsed.sampleRate, 24000);
+  assert.equal(parsed.pcm.length, 48);
+  const b64 = Buffer.from(wav).toString('base64');
+  const cache = new Map();
+  let ttsCalls = 0;
+  const voice = speech.createSpeaker({
+    getKey: () => SECRET,
+    now: fixedNow,
+    readUsage: () => ttsUsage,
+    writeUsage: u => { ttsUsage = u; },
+    cacheGet: async k => cache.get(k) || null,
+    cacheSet: async (k, bytes) => { cache.set(k, bytes); },
+    fetchImpl: async (url, req) => {
+      ttsCalls++;
+      const header = req.headers['x-goog-api-key'];
+      assert.equal(header, SECRET);
+      assert(!url.includes(SECRET) && !req.body.includes(SECRET) && !url.includes('key='));
+      assert(url.includes('/v1beta/interactions'));
+      const body = JSON.parse(req.body);
+      assert.equal(body.model, 'gemini-3.8-flash-lite-tts');
+      assert.equal(body.input[0].content[0].text, 'Welcome to Brimmesa AI.');
+      assert.equal(body.generation_config.speech_config[0].voice, 'Sulafat');
+      assert(/warm/.test(body.input[0].content[0].annotations[0].style));
+      return { ok: true, status: 200, json: async () => ({ output_audio: { data: b64, mime_type: 'audio/wav' } }) };
+    }
+  });
+  let ttsUsage = { day: '', count: 0 };
+  const said = await voice.synthesize('Welcome to BRIMMESA AI.', 'Sulafat', 'warm and confident');
+  assert.equal(said.spoken, 'Welcome to Brimmesa AI.');
+  assert.equal(ttsCalls, 1);
+  assert.equal(ttsUsage.count, 1);
+  assert.equal(speech.parseWav(said.bytes).sampleRate, 24000);
+  const again = await voice.synthesize('Welcome to BRIMMESA AI.', 'Sulafat', 'warm and confident');
+  assert.equal(again.cached, true);
+  assert.equal(ttsCalls, 1);
+  ttsUsage = { day: voice.usageNow().day, count: 40 };
+  const capped = await voice.synthesize('Another line.', 'Sulafat', 'warm');
+  assert.equal(capped.blocked, 'limit');
+  assert.equal(ttsCalls, 1);
+  const limited = speech.createSpeaker({
+    getKey: () => SECRET,
+    now: fixedNow,
+    readUsage: () => ({ day: '', count: 0 }),
+    writeUsage() { throw new Error('429 must not count'); },
+    fetchImpl: async () => ({ ok: false, status: 429, json: async () => ({}) })
+  });
+  assert.equal((await limited.synthesize('Hello.', 'Orus', 'firm')).blocked, 'rate');
+  const quiet = speech.createSpeaker({ getKey: () => '', fetchImpl: async () => { throw new Error('no key must not fetch'); } });
+  assert.equal((await quiet.synthesize('Hello.', 'Leda', 'playful')).blocked, 'nokey');
+  assert.equal(cast.find(c => c.id === 'amara').voice.geminiVoice, 'Sulafat');
+  assert.equal(cast.find(c => c.id === 'jasmine').voice.geminiVoice, 'Leda');
+  assert.equal(cast.find(c => c.id === 'renee').voice.geminiVoice, 'Despina');
+  assert.equal(cast.find(c => c.id === 'marcus').voice.geminiVoice, 'Orus');
 
   console.log('\nALL TESTS PASSED');
 })().catch(err => { console.error('FAIL', err); process.exit(1); });

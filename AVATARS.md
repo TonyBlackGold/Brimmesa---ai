@@ -8,14 +8,14 @@ Coach Amara is a full-body CC0 GLB (MakeHuman / MPFB) drawn by [TalkingHead 1.7]
 
 License for `avatar/models/amara.glb`: [CC0](https://creativecommons.org/publicdomain/zero/1.0/). Upstream file and statement: [mpfb.glb](https://github.com/met4citizen/TalkingHead/blob/main/avatars/mpfb.glb), noted in the [TalkingHead readme](https://github.com/met4citizen/TalkingHead/blob/main/README.md). The copy here is Draco-compressed with WebP textures (about 6 MB) and is lazy-loaded. Morph normals were removed. It may be redistributed.
 
-The voice is still `speechSynthesis`. TalkingHead is not allowed to call a TTS service. `speechSynthesis` does not hand back audio, so the mouth is a text viseme timeline (English letter-to-sound rules from TalkingHead's `lipsync-en.mjs`). If the browser fires `onboundary` with `elapsedTime`, the timeline shifts. Otherwise it uses the estimate. Blinks, saccades, breathing, and small head motion come from TalkingHead. Hand and nod gestures are randomized from each character's profile in `data/characters.json` (`gestureRate`, `expressiveness`, `mannerisms`, `voice`).
+When a Gemini key is saved, speech is Gemini TTS audio and the mouth follows that buffer. Otherwise the voice is `speechSynthesis`. TalkingHead does not call a TTS service itself. `speechSynthesis` does not hand back audio, so the mouth is a text viseme timeline (English letter-to-sound rules from TalkingHead's `lipsync-en.mjs`). If the browser fires `onboundary` with `elapsedTime`, the timeline shifts. Otherwise it uses the estimate. Blinks, saccades, breathing, and small head motion come from TalkingHead. Hand and nod gestures are randomized from each character's profile in `data/characters.json` (`gestureRate`, `expressiveness`, `mannerisms`, `voice`).
 
 ## Character API
 
 `avatar/character.js` is the shared surface. `app.js` reaches it through `setAvatarState`.
 
 - `load(model)` loads a GLB URL. Only Amara has one today.
-- `speak(text | { audio, visemes }, { emotion, rate })` plays text-timed visemes. A passed audio buffer is optional and is muted here so it cannot double the coach's voice.
+- `speak(text | { audio, words, audible }, { emotion, rate })` plays the mouth. When `audible` is true the buffer is heard and the visemes follow its words. A text-only call keeps the mixer silent so the browser voice is the only sound.
 - `setState('idle' | 'listening' | 'speaking' | 'thinking')`
 - `interrupt()` stops the mouth. A mic tap does this and then sets listening.
 - `react('laugh' | 'concern' | 'smile' | 'surprise')` on laughter and a few emotion words in what the user said.

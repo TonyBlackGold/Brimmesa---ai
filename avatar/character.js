@@ -113,8 +113,9 @@ export class Character {
       this.session++;
       this.realigns = 0;
       this.plan = null;
-      this.head.setMixerGain(0, 0);
       if (opt.emotion) this.react(opt.emotion);
+      const audible = !!(input.audio && input.audible !== false);
+      this.head.setMixerGain(audible ? 1 : 0, 0);
       this.head.speakAudio(input, { lipsyncLang: 'en' });
       return;
     }

@@ -368,9 +368,11 @@
       return (row.name || id) + ' (' + (row.role || 'coach') + '): ' + (row.personality || '') + (manners ? ' Mannerisms: ' + manners + '.' : '');
     },
     lengthRule(eng) {
-      return eng && eng.p && eng.p.driving
+      const brand = 'Write the brand as Brimmesa, in mixed case, never in all capitals.';
+      const pace = eng && eng.p && eng.p.driving
         ? 'Driving mode: one short spoken sentence. No lists.'
         : 'Reply in 1 to 3 short spoken sentences. Voice-friendly. No lists, no markdown.';
+      return pace + ' ' + brand;
     },
     areaContext(eng) {
       const areas = (eng && eng.areas) || [];

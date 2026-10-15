@@ -5,6 +5,7 @@
   const GEMINI_MODEL = 'brimmesa.gemini.model';
   const GEMINI_USAGE = 'brimmesa.gemini.usage';
   const GEMINI_TURNS = 'brimmesa.gemini.turns';
+  const GEMINI_TTS = 'brimmesa.gemini.tts';
   const GEMINI_DEFAULT = 'gemini-3.5-flash-lite';
   const $ = id => document.getElementById(id);
   const worlds = await (await fetch('data/worlds.json')).json();
@@ -41,6 +42,52 @@
     writeMemory(m) { localStorage.setItem(GEMINI_TURNS, JSON.stringify((m || []).slice(-10))); }
   });
   if (llm.enabled) eng.provider = llm;
+  const ttsCache = new Map();
+  function openTtsDb() {
+    return new Promise((resolve, reject) => {
+      if (!window.indexedDB) return reject(new Error('no idb'));
+      const req = indexedDB.open('brimmesa-tts', 1);
+      req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains('clips')) req.result.createObjectStore('clips'); };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  async function cacheGet(key) {
+    if (ttsCache.has(key)) return ttsCache.get(key);
+    try {
+      const db = await openTtsDb();
+      const bytes = await new Promise((resolve, reject) => {
+        const req = db.transaction('clips').objectStore('clips').get(key);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      });
+      if (bytes) ttsCache.set(key, bytes);
+      return bytes;
+    } catch (e) { return null; }
+  }
+  async function cacheSet(key, bytes) {
+    ttsCache.set(key, bytes);
+    if (ttsCache.size > 30) {
+      const oldest = ttsCache.keys().next().value;
+      ttsCache.delete(oldest);
+    }
+    try {
+      const db = await openTtsDb();
+      await new Promise((resolve, reject) => {
+        const req = db.transaction('clips', 'readwrite').objectStore('clips').put(bytes, key);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) {}
+  }
+  const speaker = BrimSpeech.createSpeaker({
+    getKey() { return localStorage.getItem(GEMINI_KEY) || ''; },
+    now() { return Date.now(); },
+    readUsage() { return readJSON(GEMINI_TTS, { day: '', count: 0 }); },
+    writeUsage(u) { localStorage.setItem(GEMINI_TTS, JSON.stringify({ day: u.day, count: u.count })); },
+    cacheGet,
+    cacheSet
+  });
 
   const BLURB = {
     'spice-aisle': 'Two people in the aisle. Practice a warm, respectful conversation.',
@@ -225,8 +272,9 @@
   }
   function voiceFor(id, cfg) {
     if (!voices.length) return null;
-    const pref = (cfg.prefer || []).map(s => voices.find(v => v.name.includes(s))).find(Boolean);
-    if (pref && id === 'coach') return pref;
+    const ranked = ['Google', 'Natural', 'Neural'].concat(cfg.prefer || []);
+    const pref = ranked.map(s => voices.find(v => v.name && v.name.includes(s))).find(Boolean);
+    if (pref) return pref;
     const i = Math.max(0, castOrder.indexOf(id));
     return voices[i % voices.length];
   }
@@ -237,6 +285,8 @@
       try { synth.cancel(); const u = new SpeechSynthesisUtterance(' '); u.volume = 0; synth.speak(u); synth.resume(); } catch (e) {}
     }
     if (face) face.resume();
+    const ctx = audioContext();
+    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
   }
   function speakChunk(text, voice, pitch, rate, onutter) {
     return new Promise(res => {
@@ -252,20 +302,108 @@
     });
   }
   function isAmara(speaker) { return speaker === 'coach' || speaker === 'amara'; }
+  let audioCtx = null, currentSource = null, speechWait = null, toldTts = '';
+  function audioContext() {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) audioCtx = new AC();
+    }
+    return audioCtx;
+  }
+  function stopPlayback() {
+    if (currentSource) { try { currentSource.stop(); } catch (e) {} currentSource = null; }
+    if (speechWait) { const done = speechWait; speechWait = null; done(); }
+  }
+  function waitMs(ms) {
+    return new Promise(resolve => {
+      const t = setTimeout(finish, ms);
+      function finish() { clearTimeout(t); if (speechWait === finish) speechWait = null; resolve(); }
+      speechWait = finish;
+    });
+  }
+  function noteTts(kind) {
+    if (toldTts === kind) return;
+    toldTts = kind;
+    if (kind === 'limit') $('note').textContent = "That's today's spoken-voice allowance. I'll use this browser's voice until tomorrow.";
+    else if (kind === 'rate') $('note').textContent = "Google's free voice tier is busy. I'll use this browser's voice for now.";
+  }
+  function bytesToBuffer(ctx, bytes) {
+    const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    return ctx.decodeAudioData(copy);
+  }
+  async function playBuffer(buffer, line, spoken) {
+    const ctx = audioContext();
+    if (ctx && ctx.state === 'suspended') { try { await ctx.resume(); } catch (e) {} }
+    const plan = BrimSpeech.fitWords(spoken, Math.round((buffer.duration || 0.3) * 1000));
+    const moving = face && isAmara(line.speaker);
+    if (moving) {
+      face.speak({
+        audio: buffer,
+        audible: true,
+        words: plan.words,
+        wtimes: plan.wtimes,
+        wdurations: plan.wdurations
+      }, { emotion: line.emotion || null });
+      await waitMs(Math.ceil((buffer.duration || 0.3) * 1000) + 60);
+      return;
+    }
+    if (!ctx) return;
+    await new Promise(resolve => {
+      const src = ctx.createBufferSource();
+      currentSource = src;
+      src.buffer = buffer;
+      src.connect(ctx.destination);
+      const finish = () => { if (currentSource === src) currentSource = null; resolve(); };
+      src.onended = finish;
+      speechWait = finish;
+      try { src.start(); } catch (e) { finish(); }
+    });
+  }
+  async function prepareSpeech(text, line, cfg) {
+    const voiceName = cfg.geminiVoice || 'Sulafat';
+    const style = BrimSpeech.styleFor(cfg.style, line.emotion);
+    const result = await speaker.synthesize(text, voiceName, style);
+    paintGemini();
+    if (!result || result.blocked || !result.bytes) {
+      if (result && (result.blocked === 'limit' || result.blocked === 'rate')) noteTts(result.blocked);
+      return null;
+    }
+    const ctx = audioContext();
+    if (!ctx) return null;
+    try {
+      const buffer = await bytesToBuffer(ctx, result.bytes);
+      return { buffer, spoken: result.spoken };
+    } catch (e) { return null; }
+  }
   async function speak(line) {
-    if (!synth) return;
+    const gen = speechGen;
+    const id = playId;
+    const parts = BrimSpeech.sentences(line && line.text);
+    if (!parts.length) return;
     const cfg = voiceCfg(line.speaker);
+    let upcoming = prepareSpeech(parts[0], line, cfg);
+    for (let i = 0; i < parts.length; i++) {
+      if (speechGen !== gen || id !== playId) return;
+      const ready = await upcoming;
+      upcoming = i + 1 < parts.length ? prepareSpeech(parts[i + 1], line, cfg) : null;
+      if (speechGen !== gen || id !== playId) return;
+      if (ready && ready.buffer) {
+        await playBuffer(ready.buffer, line, ready.spoken);
+        continue;
+      }
+      await speakBrowser(parts[i], line, cfg, gen, id);
+    }
+  }
+  async function speakBrowser(text, line, cfg, gen, id) {
+    if (!synth || speechGen !== gen || id !== playId) return;
     const v = voiceFor(line.speaker, cfg);
+    const engine = BrimSpeech.browserSpells(v) ? 'basic' : 'natural';
+    const spoken = BrimSpeech.spokenText(text, engine);
     let pitch = cfg.pitch || 1, rate = (cfg.rate || 1) * (eng.p.driving ? 1.05 : 1);
     if (voices.length < 2 && line.speaker !== 'coach') pitch = Math.min(2, Math.max(0.1, 1 + (pitch - 1) * 1.8));
-    for (const part of line.text.match(/[^.!?]+[.!?]*/g) || [line.text]) {
-      if (stopSpeaking) break;
-      const text = part.trim();
-      if (!text) continue;
-      const moving = face && isAmara(line.speaker);
-      if (moving) face.speak(text, { rate, pitch, emotion: line.emotion || null });
-      await speakChunk(text, v, pitch, rate, moving ? u => face.bindUtterance(u) : null);
-    }
+    const moving = face && isAmara(line.speaker);
+    if (moving) face.speak(spoken, { rate, pitch, emotion: line.emotion || null });
+    await speakChunk(spoken, v, pitch, rate, moving ? u => face.bindUtterance(u) : null);
   }
   let stopSpeaking = false, busy = false, playId = 0, greeted = false, listening = false, gotResult = false, misses = 0;
   function show(line) {
@@ -335,7 +473,16 @@
     else showHome();
     play(lines);
   }
-  function interrupt() { stopSpeaking = true; playId++; busy = false; if (synth) synth.cancel(); if (face) face.interrupt(); }
+  let speechGen = 0;
+  function interrupt() {
+    speechGen++;
+    stopSpeaking = true;
+    playId++;
+    busy = false;
+    stopPlayback();
+    if (synth) synth.cancel();
+    if (face) face.interrupt();
+  }
 
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let rec = null;
@@ -634,6 +781,10 @@
     if (modelBox && document.activeElement !== modelBox) modelBox.value = savedModel;
     const usage = llm.usageNow();
     if ($('geminiUsage')) $('geminiUsage').textContent = usage.count + ' of ' + (llm.dailyLimit || 50) + ' AI turns today.';
+    if ($('ttsUsage') && speaker) {
+      const voiceUse = speaker.usageNow();
+      $('ttsUsage').textContent = voiceUse.count + ' of ' + speaker.dailyLimit + ' spoken lines today.';
+    }
     if ($('geminiStatus')) $('geminiStatus').textContent = localStorage.getItem(GEMINI_KEY) ? 'A key is saved on this device.' : 'No key saved.';
   }
 
@@ -754,6 +905,20 @@
     ensureFace().then(api => { if (api && document.body.dataset.view === 'home') api.setVisible(true); });
   };
   bootAvatar();
+  const voiceBox = $('voicePreviews');
+  if (voiceBox) cast.forEach(row => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ghost';
+    b.textContent = 'Preview ' + row.name.replace(/^Coach /, '');
+    b.onclick = () => {
+      unlockAudio();
+      interrupt();
+      const text = row.id === 'amara' ? 'Hi. I am Coach Amara, from BRIMMESA.' : 'Hi. I am ' + row.name + '.';
+      speak({ speaker: row.speakerId || 'coach', text, emotion: 'smile' });
+    };
+    voiceBox.append(b);
+  });
   $('focusEdit').onclick = () => document.body.classList.add('nav-open');
   $('focusGo').onclick = () => {
     const id = $('focusGo').dataset.activity;

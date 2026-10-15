@@ -133,6 +133,7 @@ header.top {
   content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background: linear-gradient(180deg, rgba(0,0,0,.05) 30%, rgba(0,0,0,.25) 62%, rgba(7,8,12,.78));
 }
+.voice-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
 .hero-status {
   position: absolute; z-index: 2; top: 12px; left: 12px; right: 12px;
   display: flex; flex-wrap: wrap; gap: 6px; align-items: center; pointer-events: none;
@@ -511,7 +512,11 @@ input[type=checkbox] { width: 22px; height: 22px; }
   <label class="row"><input type="checkbox" id="drive"> Driving mode (short, audio only)</label>
   <label class="row"><input type="checkbox" id="auto" checked> Hands-free (keep listening)</label>
   <label class="row"><input type="checkbox" id="avatar3d" checked> Animated 3D coach</label>
-  <p class="fine">Stylized 3D with text-timed lip sync. Off keeps the still portrait. Nothing is uploaded.</p>
+  <p class="fine">Stylized 3D. With a saved key the mouth follows the spoken audio. Without one, lip sync is timed from the text. Off keeps the still portrait. Nothing is uploaded.</p>
+  <h4>Voices</h4>
+  <p class="fine" id="ttsUsage">0 of 40 spoken lines today.</p>
+  <div class="voice-row" id="voicePreviews"></div>
+  <p class="fine">BRIMMESA stays on screen. Speech says the name as the word Brimmesa. A saved key uses Gemini voices. Repeated lines are cached on this device. The microphone is not recorded.</p>
   <h4>AI brain</h4>
   <label class="field" for="geminiModel">Model</label>
   <input id="geminiModel" type="text" autocomplete="off" spellcheck="false" value="gemini-3.5-flash-lite">
@@ -551,6 +556,7 @@ try {
 } catch (e) {}
 </script>
 <script src="engine.js"></script>
+<script src="speech.js"></script>
 <script src="app.js"></script>
 <script>
 if ('serviceWorker' in navigator) {
