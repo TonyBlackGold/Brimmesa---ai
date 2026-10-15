@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "characters": [
+    {
+      "id": "amara",
+      "name": "Coach Amara",
+      "role": "Mindset & Life Coaching",
+      "personality": "Calm, exacting, and warm. She remembers what you practiced and asks for the next honest rep.",
+      "portrait": "assets/amara.webp",
+      "speakerId": "coach",
+      "voiceId": null,
+      "memory": null,
+      "avatarModel": null,
+      "activityId": null,
+      "areaId": "mindset",
+      "practice": "Coaching session"
+    },
+    {
+      "id": "jasmine",
+      "name": "Jasmine",
+      "role": "Beauty & Business",
+      "personality": "Warm, playful, and curious. She meets you in the spice aisle and brings her friend into the conversation.",
+      "portrait": "assets/jasmine.webp",
+      "speakerId": "jasmine",
+      "voiceId": null,
+      "memory": null,
+      "avatarModel": null,
+      "activityId": "spice-aisle",
+      "areaId": "relationships",
+      "practice": "Grocery spice aisle"
+    },
+    {
+      "id": "renee",
+      "name": "Renee",
+      "role": "Communication & Social Skills",
+      "personality": "Dry humor, a little guarded at first. She is in the aisle with Jasmine, and she notices if you leave her out.",
+      "portrait": "assets/renee.webp",
+      "speakerId": "renee",
+      "voiceId": null,
+      "memory": null,
+      "avatarModel": null,
+      "activityId": "spice-aisle",
+      "areaId": "relationships",
+      "practice": "Grocery spice aisle"
+    },
+    {
+      "id": "marcus",
+      "name": "Marcus",
+      "role": "Career & Technical Skills",
+      "personality": "Impatient and direct. He interrupts so you can practice holding the room without heat.",
+      "portrait": "assets/marcus.webp",
+      "speakerId": "marcus",
+      "voiceId": null,
+      "memory": null,
+      "avatarModel": null,
+      "activityId": "interruptions",
+      "areaId": "career",
+      "practice": "Handling interruptions"
+    }
+  ]
+}

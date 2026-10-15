@@ -29,16 +29,23 @@
     return { xp, improved: improvement > 0 && m.attempts > 1, levelUp: level(p.xp) > before };
   }
 
-  // Scripted fallback provider. A real LLM provider implements the same respond(ctx) => lines[] interface.
-  const ScriptedProvider = { name: 'scripted', async respond(ctx) { return ctx.scripted(); } };
+  // ConversationProvider: { name, enabled, respond(ctx, engine) -> Promise<{speaker, text}[]> }.
+  // ctx.scripted() is the current engine turn. The shell selects ScriptedProvider.
+  // LLMProvider is a Phase 2 stub: disabled, no API key, and no network call.
+  const ScriptedProvider = { name: 'scripted', enabled: true, async respond(ctx) { return ctx.scripted(); } };
+  const LLMProvider = { name: 'llm', enabled: false, model: null, async respond(ctx) { return ctx.scripted(); } };
 
   class Engine {
-    constructor({ worlds, content, profile, provider, now }) {
+    constructor({ worlds, content, profile, provider, now, areas }) {
       this.worlds = worlds; this.content = content; // content: {activityId: json}
-      this.p = profile || newProfile(); this.provider = provider || ScriptedProvider;
+      this.p = profile || newProfile();
+      this.provider = provider && provider.enabled !== false ? provider : ScriptedProvider;
       this.now = now || (() => Date.now());
       this.mode = 'menu'; this.act = null; this.s = null;
+      this.areas = areas || [];
+      this.area = null;
     }
+    norm(s) { return String(s || '').toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ').trim(); }
     activities() { return this.worlds.worlds.flatMap(w => w.activities.map(a => ({ ...a, world: w.title }))); }
     C(text) { return { speaker: 'coach', text }; }
 
@@ -66,6 +73,45 @@
       const t = text.toLowerCase();
       return this.activities().find(a => has(t, a.keywords) || t.includes(a.title.toLowerCase()));
     }
+    pickArea(text) {
+      if (!this.areas.length) return null;
+      const t = this.norm(text);
+      let best = null, score = 0;
+      for (const area of this.areas) {
+        const title = this.norm(area.title);
+        if (title && t.includes(title)) return area;
+        for (const k of area.keywords || []) {
+          const key = this.norm(k);
+          if (key && t.includes(key) && key.length > score) { best = area; score = key.length; }
+        }
+      }
+      return best;
+    }
+    // An area command wins when the phrase names that area, without stealing
+    // short activity commands such as "communication" or "security plus".
+    areaCommandWins(text, area, activity) {
+      if (!area) return false;
+      const t = this.norm(text);
+      if (t.includes(this.norm(area.title))) return true;
+      const actWords = new Set();
+      this.activities().forEach(a => (a.keywords || []).forEach(k => actWords.add(this.norm(k))));
+      return (area.keywords || []).some(k => {
+        const key = this.norm(k);
+        return key && t.includes(key) && !actWords.has(key);
+      });
+    }
+    openArea(area) {
+      this.area = area; this.mode = 'area'; this.act = null; this.s = null;
+      return [this.C(area.intro)];
+    }
+    startReflection() {
+      const prompts = (this.area && this.area.reflections) || [];
+      if (!prompts.length) return [this.C('I am still writing the reflections for this area.')];
+      this.mode = 'reflect';
+      this.s = { i: 0, hits: 0 };
+      touchStreak(this.p, this.now());
+      return [this.C(prompts[0].prompt)];
+    }
 
     async handle(raw) {
       const text = (raw || '').trim(); const t = text.toLowerCase();
@@ -85,11 +131,26 @@
         this.mode = 'menu';
         return [this.C(`Great to meet you, ${this.p.name}. You can say what you want to practice anytime, or say "change subject" to switch.`), this.menuPrompt()];
       }
-      if (this.mode === 'menu') {
+      if (this.mode === 'menu' || this.mode === 'area') {
+        const areaHit = this.pickArea(text);
         const a = this.pick(text);
-        if (!a) return [this.C("I didn't catch which one. You can say social, communication, or Security plus.")];
-        if (this.p.driving && !a.driving) return [this.C("That one needs your full attention, so let's save it for when you're parked. Try communication or Security plus.")];
-        return this.start(a);
+        const areaWins = this.areaCommandWins(text, areaHit, a);
+        const sameArea = this.mode === 'area' && this.area && areaHit && areaHit.id === this.area.id;
+        if (areaWins && !sameArea) return this.openArea(areaHit);
+        if (a) {
+          if (this.p.driving && !a.driving) return [this.C("That one needs your full attention, so let's save it for when you're parked. Try communication or Security plus.")];
+          if (this.mode === 'menu') this.area = null;
+          return this.start(a);
+        }
+        if (this.mode === 'area') {
+          if (/\b(reflect|reflection)\b/.test(t)) return this.startReflection();
+          return [this.C((this.area && this.area.nudge) || 'Tell me which area you want, or say reflect.')];
+        }
+        return [this.C("I didn't catch which one. You can say social, communication, or Security plus.")];
+      }
+      if (this.mode === 'reflect') {
+        const ctx = { text, t, scripted: () => this.reflectTurn(text, t) };
+        return this.provider.respond(ctx, this);
       }
       const ctx = { text, t, scripted: () => this[this.act.type + 'Turn'](text, t) };
       return this.provider.respond(ctx, this);
@@ -176,6 +237,27 @@
       return out.concat(this.finish(c.skill, score, [`${s.correct} of ${s.order.length} correct`], tips, 'Security plus'));
     }
 
+    reflectTurn(text) {
+      const prompts = this.area.reflections;
+      const cur = prompts[this.s.i];
+      const words = text.split(/\s+/).filter(Boolean).length;
+      if (words >= 4) this.s.hits++;
+      const out = [this.C(cur.reply)];
+      this.s.i++;
+      if (this.s.i < prompts.length) { out.push(this.C(prompts[this.s.i].prompt)); return out; }
+      const score = Math.round(70 + (this.s.hits / prompts.length) * 30);
+      const skill = this.area.skill || ('reflect.' + this.area.id);
+      const r = awardXP(this.p, skill, score);
+      const fb = `${this.area.title} reflection: you stayed with ${prompts.length} questions.`;
+      this.p.lastFeedback = fb;
+      this.p.lastActivity = 'area:' + this.area.id;
+      this.p.history.unshift({ t: this.now(), activity: this.area.title + ' reflection', score, xp: r.xp, summary: fb });
+      this.p.history = this.p.history.slice(0, 50);
+      this.mode = 'area'; this.s = null;
+      out.push(this.C(`That is enough for now. You earned ${r.xp} XP.${r.levelUp ? ` Level up! You're now level ${level(this.p.xp)}.` : ''} Say an activity, or name another area.`));
+      return out;
+    }
+
     finish(skill, score, good, tips, label) {
       const r = awardXP(this.p, skill, score);
       const fb = `${label}: score ${score}. ${good.length ? 'Strengths: ' + good.join(', ') + '.' : ''} ${tips.length ? 'Work on: ' + tips.join(' ') : ''}`.replace(/\s+/g, ' ').trim();
@@ -203,6 +285,6 @@
     } };
   }
 
-  const api = { Engine, newProfile, level, awardXP, touchStreak, ScriptedProvider, makeHttpProvider };
+  const api = { Engine, newProfile, level, awardXP, touchStreak, ScriptedProvider, LLMProvider, makeHttpProvider };
   if (typeof module !== 'undefined') module.exports = api; else root.BrimEngine = api;
 })(this);

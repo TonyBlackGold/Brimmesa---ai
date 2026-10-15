@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "areas": [
+    {
+      "id": "mindset",
+      "title": "Mindset & Discipline",
+      "summary": "Mental strength. Daily habits.",
+      "icon": "mindset",
+      "keywords": ["mindset", "discipline", "mindset and discipline"],
+      "activityIds": [],
+      "skill": "reflect.mindset",
+      "intro": "Mindset and discipline. I care about the standard you keep when nobody claps. Name it, then we will practice keeping it.",
+      "nudge": "Say reflect to answer three short questions, or name another area.",
+      "reflections": [
+        { "prompt": "Name one standard you kept this week, even when it was inconvenient.", "reply": "Good. A standard you can name is a standard you can keep." },
+        { "prompt": "Where did you negotiate that standard down, and what did it cost?", "reply": "That honesty is the work. We train the moment you want to slip." },
+        { "prompt": "What is the one rep you will not skip tomorrow?", "reply": "One clear rep. Do that before you negotiate with yourself." }
+      ],
+      "coming": ["Daily discipline drills", "Focus sprints"]
+    },
+    {
+      "id": "health",
+      "title": "Health & Fitness",
+      "summary": "Energy. Strength. Longevity.",
+      "icon": "health",
+      "keywords": ["health", "fitness", "health and fitness"],
+      "activityIds": [],
+      "skill": "reflect.health",
+      "intro": "Health and fitness. Energy is the budget for every other goal. Tell me the truth about how you treated your body lately.",
+      "nudge": "Say reflect for a short check-in, or name another area.",
+      "reflections": [
+        { "prompt": "How did your body feel over the last two days, in one honest sentence?", "reply": "I have that. We start from the body you actually have." },
+        { "prompt": "What did you do, or skip, that your future self would notice?", "reply": "Noted. Small skips compound, and so do small keeps." },
+        { "prompt": "What is one physical promise you can keep before tomorrow night?", "reply": "Make it small enough to finish. Then finish it." }
+      ],
+      "coming": ["Training plans", "Recovery check-ins"]
+    },
+    {
+      "id": "career",
+      "title": "Career & Income",
+      "summary": "Skills. Certifications. Wealth.",
+      "icon": "career",
+      "keywords": ["career", "career and income"],
+      "activityIds": ["secplus-701", "interruptions"],
+      "skill": "reflect.career",
+      "intro": "Career and income. Skill is how you stay expensive. We can drill Security Plus, or practice holding a room when someone cuts you off.",
+      "nudge": "Say Security Plus, say communication, or say reflect.",
+      "reflections": [
+        { "prompt": "Which skill, if you were sharper at it in ninety days, would change your options?", "reply": "That is a real target. We will aim practice at it." },
+        { "prompt": "What did you practice this week that was uncomfortable and useful?", "reply": "Uncomfortable and useful is the right kind of work." },
+        { "prompt": "What will you study or ship in the next session?", "reply": "Say it once more in your head, then go do the first ten minutes." }
+      ],
+      "coming": ["More Security+ items", "Interview drills"]
+    },
+    {
+      "id": "business",
+      "title": "Business & Entrepreneurship",
+      "summary": "Build. Scale. Freedom.",
+      "icon": "business",
+      "keywords": ["business", "entrepreneurship", "entrepreneur"],
+      "activityIds": [],
+      "skill": "reflect.business",
+      "intro": "Business and entrepreneurship. Clarity is the product before the product. We will tighten who you serve and what you say.",
+      "nudge": "Say reflect, or name another area.",
+      "reflections": [
+        { "prompt": "Who do you serve, and what problem do they already pay to solve?", "reply": "If you can say that cleanly, you can build on it." },
+        { "prompt": "What offer is still vague in your mouth? Say it in one sentence.", "reply": "Shorter is stronger. We will sand that sentence down next time." },
+        { "prompt": "What is the next conversation you need to have, and with whom?", "reply": "Put that conversation on the calendar. Thinking is not the same as asking." }
+      ],
+      "coming": ["Offer practice", "Sales conversations"]
+    },
+    {
+      "id": "relationships",
+      "title": "Relationships & Communication",
+      "summary": "People. Influence. Connection.",
+      "icon": "relationships",
+      "keywords": ["relationships", "relationship"],
+      "activityIds": ["spice-aisle", "interruptions"],
+      "skill": "reflect.relationships",
+      "intro": "Relationships and communication. Warmth and spine can live in the same sentence. We can walk the spice aisle, or practice staying calm when someone interrupts.",
+      "nudge": "Say social, say communication, or say reflect.",
+      "reflections": [
+        { "prompt": "Think of a recent conversation that mattered. Did the other person feel included?", "reply": "Inclusion is a skill, not a mood. We can practice it." },
+        { "prompt": "Where did you talk to impress, instead of to connect?", "reply": "Catching that in the moment is most of the correction." },
+        { "prompt": "What is one question you wish you had asked?", "reply": "Keep that question. Use it in the next real conversation." }
+      ],
+      "coming": ["More social scenes", "Repair and boundaries"]
+    },
+    {
+      "id": "estate",
+      "title": "Real Estate & Investing",
+      "summary": "Assets. Deals. Generational wealth.",
+      "icon": "estate",
+      "keywords": ["real estate", "investing", "generational wealth"],
+      "activityIds": [],
+      "skill": "reflect.estate",
+      "intro": "Real estate and investing. Fall in love with the numbers before the photos. We will separate what you know from what you are guessing.",
+      "nudge": "Say reflect for three questions, or name another area.",
+      "reflections": [
+        { "prompt": "If a property had to support your life, what would it need to produce each month?", "reply": "A number turns a dream into a screen." },
+        { "prompt": "What do you actually understand about how that asset makes money, and what are you still guessing?", "reply": "Guesses are fine if you label them. We will replace them with facts." },
+        { "prompt": "What fact will you learn before you get attached to a deal?", "reply": "Learn that fact first. Attachment can wait." }
+      ],
+      "coming": ["Deal walkthroughs", "Risk checklists"]
+    },
+    {
+      "id": "lifestyle",
+      "title": "Lifestyle & Experiences",
+      "summary": "Travel. Family. Fun. Balance.",
+      "icon": "lifestyle",
+      "keywords": ["lifestyle", "experiences"],
+      "activityIds": [],
+      "skill": "reflect.lifestyle",
+      "intro": "Lifestyle and experiences. A good life is chosen, not performed. Tell me what actually restored you, and what only looked good.",
+      "nudge": "Say reflect, or name another area.",
+      "reflections": [
+        { "prompt": "Which experience this month actually restored you, and which one only looked good?", "reply": "Keep the one that restored you. Let the performance go." },
+        { "prompt": "What are you spending time on that you would not defend out loud?", "reply": "If you would not defend it, it does not deserve the calendar." },
+        { "prompt": "What is one experience worth planning, not posting?", "reply": "Plan it quietly. Anticipation is part of the gift." }
+      ],
+      "coming": ["Experience planning", "Calendar audits"]
+    },
+    {
+      "id": "spirit",
+      "title": "Spirituality & Purpose",
+      "summary": "Clarity. Contribution. Legacy.",
+      "icon": "spirit",
+      "keywords": ["spirituality", "purpose", "spiritual"],
+      "activityIds": [],
+      "skill": "reflect.spirit",
+      "intro": "Spirituality and purpose. Purpose is what you refuse to betray. We will see whether your week agreed with your answer.",
+      "nudge": "Say reflect, or name another area.",
+      "reflections": [
+        { "prompt": "What are you unwilling to betray, even if it slows you down?", "reply": "Hold that line. Speed is not the same as direction." },
+        { "prompt": "Where did your calendar disagree with that answer this week?", "reply": "The calendar tells the truth. We can edit it." },
+        { "prompt": "What practice, however small, will you keep tomorrow?", "reply": "Small and kept beats grand and imagined." }
+      ],
+      "coming": ["Purpose reviews", "Weekly examen"]
+    }
+  ]
+}
