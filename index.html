@@ -317,7 +317,13 @@ button.ghost {
   .suggest-row { display: grid; grid-template-columns: 1fr 1fr; }
   .suggest { min-width: 0; }
 }
-dialog { border: 1px solid var(--line); border-radius: 18px; background: #12141a; color: var(--ink); width: min(560px, 94vw); }
+dialog { border: 1px solid var(--line); border-radius: 18px; background: #12141a; color: var(--ink); width: min(560px, 94vw); max-height: min(90vh, 820px); overflow: auto; }
+#settingsDlg h4 { font-family: var(--serif); font-size: 18px; margin: 14px 0 6px; }
+#settingsDlg label.field { display: block; margin: 8px 0 2px; font-size: 13px; color: var(--muted); }
+#settingsDlg input[type="text"], #settingsDlg input[type="password"] {
+  width: 100%; box-sizing: border-box; margin: 0 0 8px; min-height: 44px;
+  background: #0e1014; color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 16px;
+}
 dialog::backdrop { background: rgba(0,0,0,.62); }
 dialog h3 { font-family: var(--serif); margin: 0 0 8px; }
 .dlg-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
@@ -494,6 +500,19 @@ input[type=checkbox] { width: 22px; height: 22px; }
   <label class="row"><input type="checkbox" id="auto" checked> Hands-free (keep listening)</label>
   <label class="row"><input type="checkbox" id="avatar3d"> Animated 3D coach</label>
   <p class="fine">Stylized 3D with text-timed lip sync. Off keeps the still portrait. Nothing is uploaded.</p>
+  <h4>AI brain</h4>
+  <label class="field" for="geminiModel">Model</label>
+  <input id="geminiModel" type="text" autocomplete="off" spellcheck="false" value="gemini-3.5-flash-lite">
+  <label class="field" for="geminiKey">Gemini API key</label>
+  <input id="geminiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a key from Google AI Studio">
+  <p class="fine" id="geminiStatus">No key saved.</p>
+  <p class="fine" id="geminiUsage">0 of 50 AI turns today.</p>
+  <div class="dlg-actions">
+    <button class="gold" id="geminiSave" type="button">Save</button>
+    <button class="ghost" id="geminiTest" type="button">Test connection</button>
+    <button class="ghost" id="geminiRemove" type="button">Remove key</button>
+  </div>
+  <p class="fine">The key stays on this device. It is not uploaded to Brimmesa. Google's free tier may use prompts to improve its products. No audio is sent.</p>
   <p class="fine">No audio is recorded. Speech stays in this browser. Progress stays on this device.</p>
   <div class="dlg-actions">
     <button class="gold" id="openHist" type="button">Progress &amp; history</button>

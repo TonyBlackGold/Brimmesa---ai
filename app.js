@@ -1,6 +1,11 @@
 // Browser shell: dashboard, speech in/out, portraits. Logic lives in engine.js.
 (async function () {
   const KEY = 'brimmesa.profile.v1';
+  const GEMINI_KEY = 'brimmesa.gemini.key';
+  const GEMINI_MODEL = 'brimmesa.gemini.model';
+  const GEMINI_USAGE = 'brimmesa.gemini.usage';
+  const GEMINI_TURNS = 'brimmesa.gemini.turns';
+  const GEMINI_DEFAULT = 'gemini-3.5-flash-lite';
   const $ = id => document.getElementById(id);
   const worlds = await (await fetch('data/worlds.json')).json();
   const areasDoc = await (await fetch('data/areas.json')).json();
@@ -22,6 +27,20 @@
   const profile = JSON.parse(localStorage.getItem(KEY) || 'null') || BrimEngine.newProfile();
   const eng = new BrimEngine.Engine({ worlds, content, profile, areas });
   if (!eng.p.name) eng.mode = 'askname';
+  function readJSON(key, fallback) {
+    try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; }
+  }
+  const llm = BrimEngine.createLLMProvider({
+    enabled: !!localStorage.getItem(GEMINI_KEY),
+    getKey() { return localStorage.getItem(GEMINI_KEY) || ''; },
+    getModel() { return localStorage.getItem(GEMINI_MODEL) || GEMINI_DEFAULT; },
+    getCast() { return cast; },
+    readUsage() { return readJSON(GEMINI_USAGE, { day: '', count: 0 }); },
+    writeUsage(u) { localStorage.setItem(GEMINI_USAGE, JSON.stringify({ day: u.day, count: u.count })); },
+    readMemory() { return readJSON(GEMINI_TURNS, []); },
+    writeMemory(m) { localStorage.setItem(GEMINI_TURNS, JSON.stringify((m || []).slice(-10))); }
+  });
+  if (llm.enabled) eng.provider = llm;
 
   const BLURB = {
     'spice-aisle': 'Two people in the aisle. Practice a warm, respectful conversation.',
@@ -265,7 +284,9 @@
     const id = ++playId;
     busy = true; stopSpeaking = false; stopListening();
     for (const l of lines || []) {
-      show(l); setCaption(l); setAvatarState('speaking', { speaker: l.speaker });
+      show(l); setCaption(l);
+      if (l.emotion && face) face.react(l.emotion);
+      setAvatarState('speaking', { speaker: l.speaker });
       if (id !== playId) return;
       await speak(l);
       if (id !== playId) return;
@@ -287,6 +308,7 @@
       const emotion = (await import('./avatar/lipsync.js')).emotionFromText(value);
       if (emotion && face) face.react(emotion);
     } catch (e) {}
+    setAvatarState('thinking', { speaker: 'coach' });
     const lines = await eng.handle(value);
     if ((eng.mode === 'area' || eng.mode === 'reflect') && eng.area) { setRoute('#/area/' + eng.area.id); showArea(eng.area); }
     else showHome();
@@ -585,6 +607,14 @@
     paintScores();
   }
   function save() { localStorage.setItem(KEY, JSON.stringify(eng.p)); renderStats(); }
+  function paintGemini() {
+    const modelBox = $('geminiModel');
+    const savedModel = localStorage.getItem(GEMINI_MODEL) || GEMINI_DEFAULT;
+    if (modelBox && document.activeElement !== modelBox) modelBox.value = savedModel;
+    const usage = llm.usageNow();
+    if ($('geminiUsage')) $('geminiUsage').textContent = usage.count + ' of ' + (llm.dailyLimit || 50) + ' AI turns today.';
+    if ($('geminiStatus')) $('geminiStatus').textContent = localStorage.getItem(GEMINI_KEY) ? 'A key is saved on this device.' : 'No key saved.';
+  }
 
   function badges() {
     const p = eng.p;
@@ -624,6 +654,7 @@
   $('clear').onclick = () => {
     if (!confirm('Delete all saved progress and history on this device?')) return;
     localStorage.removeItem(KEY);
+    localStorage.removeItem(GEMINI_TURNS);
     eng.p = BrimEngine.newProfile();
     eng.mode = 'askname';
     eng.area = null;
@@ -635,8 +666,38 @@
     $('dlg').close();
     showHome();
   };
-  $('settingsBtn').onclick = () => $('settingsDlg').showModal();
+  $('settingsBtn').onclick = () => { paintGemini(); $('settingsDlg').showModal(); };
   $('settingsClose').onclick = () => $('settingsDlg').close();
+  $('geminiSave').onclick = () => {
+    const typed = ($('geminiKey').value || '').trim();
+    const model = ($('geminiModel').value || '').trim() || GEMINI_DEFAULT;
+    localStorage.setItem(GEMINI_MODEL, model);
+    if (typed) {
+      localStorage.setItem(GEMINI_KEY, typed);
+      $('geminiKey').value = '';
+    }
+    if (localStorage.getItem(GEMINI_KEY)) {
+      llm.enabled = true;
+      eng.provider = llm;
+    }
+    paintGemini();
+    if (!localStorage.getItem(GEMINI_KEY)) $('geminiStatus').textContent = 'Add a key first.';
+  };
+  $('geminiRemove').onclick = () => {
+    localStorage.removeItem(GEMINI_KEY);
+    $('geminiKey').value = '';
+    llm.enabled = false;
+    eng.provider = BrimEngine.ScriptedProvider;
+    paintGemini();
+  };
+  $('geminiTest').onclick = async () => {
+    const typed = ($('geminiKey').value || '').trim();
+    $('geminiStatus').textContent = 'Testing…';
+    const msg = await llm.testConnection(typed);
+    $('geminiStatus').textContent = msg;
+    if ($('geminiUsage')) $('geminiUsage').textContent = llm.usageNow().count + ' of ' + (llm.dailyLimit || 50) + ' AI turns today.';
+  };
+  paintGemini();
   $('drive').onchange = e => send(e.target.checked ? 'driving mode on' : 'driving mode off');
   $('avatar3d').onchange = e => {
     localStorage.setItem('brimmesa.avatar', e.target.checked ? '3d' : 'portrait');

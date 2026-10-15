@@ -6,9 +6,9 @@ BRIMMESA AI is one static site. `engine.js` holds the coaching logic and never t
 
 A provider is `{ name, enabled, respond(ctx, engine) }`. `respond` returns `[{ speaker, text }]`. `ctx.scripted()` runs the current engine turn (scenario, drill, quiz, or reflection), so any provider can fall back to the script.
 
-`ScriptedProvider` is enabled. It is the provider the page uses. It calls `ctx.scripted()` and nothing else.
+`ScriptedProvider` is the fallback. It calls `ctx.scripted()` and nothing else. Menu, driving, and activity routing run before any provider.
 
-`LLMProvider` is the Phase 2 seam. `enabled` is `false`. It has no model key and it does not call the network. Its `respond` returns `ctx.scripted()` so turning the flag on by mistake cannot go silent or leak a request. The shell never selects it.
+`createLLMProvider` builds the Gemini brain. The shared `LLMProvider` object stays disabled and has no key. The shell enables an instance only when `localStorage` holds `brimmesa.gemini.key`. The key is sent as the `x-goog-api-key` header to `generativelanguage.googleapis.com` and is never written into the page, the profile, or a log. The default model id is `gemini-3.5-flash-lite`, and Settings can change it. A local counter stops at 50 successful requests per calendar day. HTTP 429, offline, a bad key, and any other error return the scripted lines. Scenario scores use a JSON score from the model when it is a number from 0 to 100; otherwise the rubric scores the turn. Quizzes still grade the original questions.
 
 `makeHttpProvider` is the earlier optional adapter. It can post to an OpenAI-compatible proxy if some other code constructs it. This page does not construct it, and no key is shipped.
 
@@ -22,4 +22,4 @@ Progress stays on the device under `brimmesa.profile.v1`: name, XP, level, strea
 
 ## Next phase
 
-A server-side proxy can enable `LLMProvider` without putting a key in the browser. Other characters can reuse `Character.load` once each has a redistributable rig. The empty areas need real activities. Accounts, cloud voices, and payments stay off until they are explicitly chosen.
+Gemini runs in the browser after the user saves a key in Settings. The practice script still covers every turn when that key is missing or Gemini does not answer. Other characters can reuse `Character.load` once each has a redistributable rig. The empty areas need real activities. Accounts, cloud voices, and payments stay off until they are explicitly chosen.

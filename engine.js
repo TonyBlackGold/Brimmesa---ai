@@ -30,10 +30,9 @@
   }
 
   // ConversationProvider: { name, enabled, respond(ctx, engine) -> Promise<{speaker, text}[]> }.
-  // ctx.scripted() is the current engine turn. The shell selects ScriptedProvider.
-  // LLMProvider is a Phase 2 stub: disabled, no API key, and no network call.
+  // ctx.scripted() is the current engine turn. The page uses ScriptedProvider until
+  // the shell assigns a createLLMProvider() instance that has a browser-held key.
   const ScriptedProvider = { name: 'scripted', enabled: true, async respond(ctx) { return ctx.scripted(); } };
-  const LLMProvider = { name: 'llm', enabled: false, model: null, async respond(ctx) { return ctx.scripted(); } };
 
   class Engine {
     constructor({ worlds, content, profile, provider, now, areas }) {
@@ -144,17 +143,22 @@
         }
         if (this.mode === 'area') {
           if (/\b(reflect|reflection)\b/.test(t)) return this.startReflection();
-          return [this.C((this.area && this.area.nudge) || 'Tell me which area you want, or say reflect.')];
+          const nudge = () => [this.C((this.area && this.area.nudge) || 'Tell me which area you want, or say reflect.')];
+          if (this.llmOn()) return this.provider.respond({ text, t, kind: 'area', scripted: nudge }, this);
+          return nudge();
         }
-        return [this.C("I didn't catch which one. You can say social, communication, or Security plus.")];
+        const miss = () => [this.C("I didn't catch which one. You can say social, communication, or Security plus.")];
+        if (this.llmOn()) return this.provider.respond({ text, t, kind: 'coach', scripted: miss }, this);
+        return miss();
       }
       if (this.mode === 'reflect') {
-        const ctx = { text, t, scripted: () => this.reflectTurn(text, t) };
+        const ctx = { text, t, kind: 'reflect', scripted: () => this.reflectTurn(text, t) };
         return this.provider.respond(ctx, this);
       }
-      const ctx = { text, t, scripted: () => this[this.act.type + 'Turn'](text, t) };
+      const ctx = { text, t, kind: this.mode, scripted: () => this[this.act.type + 'Turn'](text, t) };
       return this.provider.respond(ctx, this);
     }
+    llmOn() { return !!(this.provider && this.provider.enabled && this.provider.name === 'llm'); }
 
     start(a) {
       this.act = a; this.mode = a.type; const c = this.content[a.id];
@@ -176,21 +180,30 @@
       return (rec === false ? 100 : rec === undefined ? 50 : 0) + dom.weight / 10;
     }
 
-    scenarioTurn(text, t) {
-      const c = this.content[this.act.id], s = this.s, sig = c.signals, R = c.responses; const out = [];
+    // Updates spice-aisle (or any scenario) signals without awarding XP.
+    // scenarioTurn keeps the scripted lines and the scripted score.
+    advanceScenario(text, t) {
+      const c = this.content[this.act.id], s = this.s, sig = c.signals, R = c.responses;
+      const out = [];
       s.turn++;
       const found = Object.keys(sig).filter(k => has(t, sig[k]));
       found.forEach(k => s.hit[k] = true);
-      if (found.includes('pushy')) { out.push(...R.pushy); return out.concat(this.endScenario()); }
-      if (s.turn === 1) out.push(...((found.includes('greeting') || found.includes('context') || found.includes('humor')) ? R.open_good : R.open_flat));
+      let ended = false;
+      if (found.includes('pushy')) { out.push(...R.pushy); ended = true; }
+      else if (s.turn === 1) out.push(...((found.includes('greeting') || found.includes('context') || found.includes('humor')) ? R.open_good : R.open_flat));
       else {
         const order = ['intro', 'humor', 'inclusive', 'context', 'question'];
         const k = order.find(x => found.includes(x));
         out.push(...(k ? R[k] : R.neutral));
       }
-      if (found.includes('exit')) { out.splice(0, out.length, ...R.exit); return out.concat(this.endScenario()); }
-      if (s.turn >= c.maxTurns) { out.push(...R.timeout); return out.concat(this.endScenario()); }
-      return out;
+      if (!ended && found.includes('exit')) { out.splice(0, out.length, ...R.exit); ended = true; }
+      if (!ended && s.turn >= c.maxTurns) { out.push(...R.timeout); ended = true; }
+      return { npc: out, ended, found };
+    }
+    scenarioTurn(text, t) {
+      const preview = this.advanceScenario(text, t);
+      if (preview.ended) return preview.npc.concat(this.endScenario());
+      return preview.npc;
     }
     endScenario() {
       const c = this.content[this.act.id], hit = this.s.hit;
@@ -274,7 +287,390 @@
     }
   }
 
-  // Optional LLM provider (disabled by default; no key shipped). Points at any OpenAI-compatible endpoint, ideally a small server proxy so keys never reach the browser.
+  const GEMINI_MODEL = 'gemini-3.5-flash-lite';
+  const EMOTIONS = ['laugh', 'concern', 'smile', 'surprise'];
+  const SPEAKERS = { amara: 'coach', coach: 'coach', jasmine: 'jasmine', renee: 'renee', marcus: 'marcus' };
+  const RATE_LINE = "Google's free tier is rate-limited right now. I'll use the practice script for this turn.";
+  const ALLOWANCE_LINE = "That's today's free AI allowance. I'll keep going from the practice script until tomorrow.";
+  const LINES_SCHEMA = {
+    type: 'OBJECT',
+    properties: {
+      lines: {
+        type: 'ARRAY',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            speaker: { type: 'STRING' },
+            text: { type: 'STRING' },
+            emotion: { type: 'STRING' }
+          },
+          required: ['speaker', 'text']
+        }
+      }
+    },
+    required: ['lines']
+  };
+  const SCORE_SCHEMA = {
+    type: 'OBJECT',
+    properties: {
+      score: { type: 'INTEGER' },
+      strengths: { type: 'ARRAY', items: { type: 'STRING' } },
+      tips: { type: 'ARRAY', items: { type: 'STRING' } }
+    },
+    required: ['score', 'strengths', 'tips']
+  };
+
+  function geminiError(status) {
+    const err = new Error('gemini');
+    err.status = status || 0;
+    return err;
+  }
+
+  // Browser Gemini provider. enabled stays false on this object. The shell builds
+  // an instance with createLLMProvider and supplies the key from localStorage.
+  // Nothing here logs the key, the request URL, or the response body.
+  const LLMProvider = {
+    name: 'llm',
+    enabled: false,
+    model: GEMINI_MODEL,
+    dailyLimit: 50,
+    getKey() { return ''; },
+    getModel() { return this.model || GEMINI_MODEL; },
+    getCast() { return []; },
+    now() { return Date.now(); },
+    fetchImpl: null,
+    readUsage() { return { day: '', count: 0 }; },
+    writeUsage() {},
+    readMemory() { return []; },
+    writeMemory() {},
+    dayStamp() {
+      const ts = typeof this.now === 'function' ? this.now() : Date.now();
+      const d = new Date(ts);
+      const p = n => String(n).padStart(2, '0');
+      return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+    },
+    usageNow() {
+      let u = { day: '', count: 0 };
+      try { u = this.readUsage() || u; } catch (e) { u = { day: '', count: 0 }; }
+      const day = this.dayStamp();
+      return { day, count: u.day === day ? (Number(u.count) || 0) : 0 };
+    },
+    bumpUsage() {
+      const u = this.usageNow();
+      try { this.writeUsage({ day: u.day, count: u.count + 1 }); } catch (e) {}
+    },
+    overLimit() { return this.usageNow().count >= (this.dailyLimit || 50); },
+    persona(id) {
+      const cast = this.getCast() || [];
+      const row = cast.find(c => c.id === id || c.speakerId === id || (id === 'coach' && (c.id === 'amara' || c.speakerId === 'coach')));
+      if (!row) return id;
+      const manners = (row.mannerisms || []).join(', ');
+      return (row.name || id) + ' (' + (row.role || 'coach') + '): ' + (row.personality || '') + (manners ? ' Mannerisms: ' + manners + '.' : '');
+    },
+    lengthRule(eng) {
+      return eng && eng.p && eng.p.driving
+        ? 'Driving mode: one short spoken sentence. No lists.'
+        : 'Reply in 1 to 3 short spoken sentences. Voice-friendly. No lists, no markdown.';
+    },
+    areaContext(eng) {
+      const areas = (eng && eng.areas) || [];
+      const list = areas.map(a => a.title + ' (' + (a.summary || '') + ')').join('; ');
+      const here = eng && eng.area
+        ? 'Current area: ' + eng.area.title + '. ' + (eng.area.intro || '') + ' If they stall: ' + (eng.area.nudge || '')
+        : 'No roadmap area is open.';
+      return here + (list ? ' Eight areas: ' + list + '.' : '');
+    },
+    progressBlock(eng) {
+      const summary = eng.progressSummary();
+      const strengths = [];
+      const working = [];
+      Object.entries((eng.p && eng.p.mastery) || {}).forEach(([k, v]) => {
+        if (!v || v.best == null || !v.attempts) return;
+        (v.best >= 85 ? strengths : working).push(k + ' ' + v.best);
+      });
+      const mem = (this.readMemory() || []).slice(-10).map(t => (t.role || 'coach') + ': ' + t.text).join('\n');
+      const last = eng.p && eng.p.lastFeedback ? String(eng.p.lastFeedback).slice(0, 240) : '';
+      return 'Progress: ' + summary
+        + '\nStrengths: ' + (strengths.join(', ') || 'none yet')
+        + '\nWorking on: ' + (working.join(', ') || 'none yet')
+        + (last ? '\nLast feedback: ' + last : '')
+        + '\nRecent turns:\n' + (mem || '(none)');
+    },
+    remember(userText, lines) {
+      let prev = [];
+      try { prev = (this.readMemory() || []).slice(-10); } catch (e) { prev = []; }
+      const next = prev.concat([{ role: 'user', text: String(userText || '').slice(0, 400) }]);
+      (lines || []).forEach(l => {
+        if (l && l.text && l.speaker !== 'user') next.push({ role: l.speaker || 'coach', text: String(l.text).slice(0, 400) });
+      });
+      try { this.writeMemory(next.slice(-10)); } catch (e) {}
+    },
+    extractText(json) {
+      const parts = ((((json || {}).candidates || [])[0] || {}).content || {}).parts || [];
+      return parts.filter(p => p && p.text && !p.thought).map(p => p.text).join('\n')
+        .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    },
+    parseJSON(text) {
+      if (!text) return null;
+      try { return JSON.parse(text); } catch (e) {
+        const m = String(text).match(/[\[{][\s\S]*[\]}]/);
+        if (!m) return null;
+        try { return JSON.parse(m[0]); } catch (e2) { return null; }
+      }
+    },
+    clip(text, driving) {
+      let t = String(text || '').replace(/[*_`#]/g, '').replace(/\s+/g, ' ').trim();
+      if (driving) {
+        const m = t.match(/.*?[.!?](?:\s|$)/);
+        t = (m ? m[0] : t).trim();
+      }
+      return t.slice(0, driving ? 180 : 400);
+    },
+    normalizeLines(raw, allowed, driving) {
+      const arr = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.lines) ? raw.lines : (raw && raw.text ? [raw] : []));
+      const out = [];
+      for (const item of arr) {
+        if (!item) continue;
+        const speaker = SPEAKERS[String(item.speaker || '').toLowerCase()];
+        if (!speaker || (allowed && allowed.indexOf(speaker) < 0)) continue;
+        const text = this.clip(item.text, driving);
+        if (!text) continue;
+        const line = { speaker, text };
+        const emotion = String(item.emotion || '').toLowerCase();
+        if (EMOTIONS.indexOf(emotion) >= 0) line.emotion = emotion;
+        out.push(line);
+        if (out.length >= (driving ? 1 : 3)) break;
+      }
+      return out;
+    },
+    async generate(prompt, schema) {
+      const key = this.getKey ? this.getKey() : '';
+      if (!key) throw geminiError(0);
+      const model = (this.getModel && this.getModel()) || this.model || GEMINI_MODEL;
+      const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent';
+      const fetchFn = this.fetchImpl || (typeof fetch === 'function' ? fetch : null);
+      if (!fetchFn) throw geminiError(0);
+      const send = (withSchema) => {
+        const generationConfig = { temperature: 0.7, maxOutputTokens: 512 };
+        if (withSchema && schema) {
+          generationConfig.responseMimeType = 'application/json';
+          generationConfig.responseSchema = schema;
+        }
+        return fetchFn(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+          body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig })
+        });
+      };
+      let res;
+      try { res = await send(true); }
+      catch (e) { throw geminiError(0); }
+      if (res && res.status === 400 && schema) {
+        try { res = await send(false); }
+        catch (e) { throw geminiError(0); }
+      }
+      if (!res || !res.ok) throw geminiError(res && res.status);
+      this.bumpUsage();
+      try { return this.extractText(await res.json()); }
+      catch (e) { return ''; }
+    },
+    async testConnection(keyOverride) {
+      const typed = keyOverride && String(keyOverride).trim();
+      const key = typed || (this.getKey ? this.getKey() : '');
+      if (!key) return 'Add a key first.';
+      const prev = this.getKey;
+      this.getKey = () => key;
+      try {
+        const text = await this.generate('Reply with JSON {"lines":[{"speaker":"coach","text":"Ready."}]}. Say nothing else.', LINES_SCHEMA);
+        const got = this.normalizeLines(this.parseJSON(text), ['coach'], false);
+        return got.length ? 'Connected. This device can reach Gemini.' : 'Gemini answered, but the reply was not the expected JSON. The practice script still works.';
+      } catch (e) {
+        const s = e && e.status;
+        if (s === 429) return "Google's free tier is rate-limited right now. The practice script still works.";
+        if (s === 400) return 'Gemini rejected the model id. Check the model name in Settings.';
+        if (s === 401 || s === 403) return 'Gemini rejected that key. Check it in Google AI Studio and try again.';
+        return 'Could not reach Gemini. The practice script still works.';
+      } finally {
+        this.getKey = prev;
+      }
+    },
+    rate(lines) {
+      return [{ speaker: 'coach', text: RATE_LINE }].concat(lines || []);
+    },
+    async respond(ctx, eng) {
+      if (!this.enabled || !(this.getKey && this.getKey())) return ctx.scripted();
+      if (this.overLimit()) {
+        const lines = await ctx.scripted();
+        return [{ speaker: 'coach', text: ALLOWANCE_LINE }].concat(lines || []);
+      }
+      if (ctx.kind === 'scenario') return this.scenario(ctx, eng);
+      if (ctx.kind === 'drill') return this.drill(ctx, eng);
+      if (ctx.kind === 'quiz') return this.quiz(ctx, eng);
+      if (ctx.kind === 'reflect') return this.reflect(ctx, eng);
+      return this.chat(ctx, eng);
+    },
+    async scenario(ctx, eng) {
+      const preview = eng.advanceScenario(ctx.text, ctx.t);
+      if ((preview.found || []).indexOf('pushy') >= 0) {
+        const tail = preview.ended ? eng.endScenario() : [];
+        return preview.npc.concat(tail);
+      }
+      const driving = !!(eng.p && eng.p.driving);
+      let npc = preview.npc;
+      let limited = false;
+      let talked = false;
+      try {
+        const prompt = [
+          'Adults only. This is a respectful coaching scene in a grocery spice aisle. No sexual content, no pressure, no appearance ratings, no contact details, no private meetups.',
+          'If the user is pushy, Jasmine and Renee set a short boundary and stop the chat.',
+          'Two distinct adult speakers. Do not speak as the coach or the user.',
+          this.persona('jasmine'),
+          this.persona('renee'),
+          'Scene: ' + ((eng.content[eng.act.id] || {}).setting || ''),
+          this.lengthRule(eng),
+          'Return JSON {"lines":[{"speaker":"jasmine","text":"...","emotion":"smile"}]} or renee. emotion is smile, concern, laugh, or surprise. One to three lines, each one speaker.',
+          this.areaContext(eng),
+          this.progressBlock(eng),
+          'User said: ' + ctx.text
+        ].join('\n');
+        const text = await this.generate(prompt, LINES_SCHEMA);
+        const lines = this.normalizeLines(this.parseJSON(text), ['jasmine', 'renee'], driving);
+        if (lines.length) { npc = lines; talked = true; }
+      } catch (e) {
+        npc = preview.npc;
+        limited = !!(e && e.status === 429);
+      }
+      let tail = [];
+      if (preview.ended) {
+        const c = eng.content[eng.act.id];
+        const scored = limited ? null : await this.scoreScenario(ctx, eng, preview);
+        if (scored) tail = eng.finish(c.skill, scored.score, scored.strengths, scored.tips, 'the spice aisle scenario');
+        else tail = eng.endScenario();
+      }
+      const spoken = (limited ? [{ speaker: 'coach', text: RATE_LINE }] : []).concat(npc, tail);
+      if (talked) this.remember(ctx.text, spoken.filter(l => l.text !== RATE_LINE));
+      return spoken;
+    },
+    async scoreScenario(ctx, eng, preview) {
+      const c = eng.content[eng.act.id];
+      const prompt = [
+        'Score this adult practice scene. Return JSON with integer score from 0 to 100, strengths, and tips.',
+        'Rubric: ' + (c.rubric || []).map(r => r.id + ' ' + r.points + ' ' + r.label).join('; '),
+        'Penalties: ' + (c.penalties || []).map(p => p.id + ' -' + p.points + ' ' + p.label).join('; '),
+        'Signals noticed in the user text: ' + (preview.found || []).join(', '),
+        'No sexual content in the tips. Two short phrases at most for strengths and for tips.',
+        'User said: ' + ctx.text
+      ].join('\n');
+      try {
+        const j = this.parseJSON(await this.generate(prompt, SCORE_SCHEMA)) || {};
+        const score = Number(j.score);
+        if (!Number.isFinite(score) || score < 0 || score > 100) return null;
+        const strengths = (Array.isArray(j.strengths) ? j.strengths : []).map(s => String(s).slice(0, 80)).filter(Boolean).slice(0, 3);
+        const tips = (Array.isArray(j.tips) ? j.tips : []).map(s => String(s).slice(0, 120)).filter(Boolean).slice(0, 2);
+        return { score: Math.round(score), strengths, tips };
+      } catch (e) { return null; }
+    },
+    async drill(ctx, eng) {
+      const lines = await ctx.scripted();
+      const marcus = (lines || []).find(l => l.speaker === 'marcus');
+      if (!marcus) return lines;
+      try {
+        const prompt = [
+          'Adults only. Professional meeting. No insults, no appearance comments, no sexual content.',
+          this.persona('marcus'),
+          'Marcus interrupts so the user can practice staying calm. Speak only as Marcus, one line.',
+          this.lengthRule(eng),
+          'Return JSON {"lines":[{"speaker":"marcus","text":"...","emotion":"concern"}]}.',
+          this.areaContext(eng),
+          this.progressBlock(eng),
+          'User said: ' + ctx.text
+        ].join('\n');
+        const got = this.normalizeLines(this.parseJSON(await this.generate(prompt, LINES_SCHEMA)), ['marcus'], !!(eng.p && eng.p.driving));
+        if (got[0]) {
+          marcus.text = got[0].text;
+          if (got[0].emotion) marcus.emotion = got[0].emotion;
+        }
+        this.remember(ctx.text, lines);
+      } catch (e) {
+        if (e && e.status === 429) lines.unshift({ speaker: 'coach', text: RATE_LINE });
+      }
+      return lines;
+    },
+    async quiz(ctx, eng) {
+      const lines = await ctx.scripted();
+      try {
+        const prompt = [
+          this.persona('amara'),
+          'Security+ tutor. The app already graded this answer against the original question. Do not rewrite the question, do not change the verdict, and do not invent a new item.',
+          'Add one short study sentence in your own words.',
+          this.lengthRule(eng),
+          'Return JSON {"lines":[{"speaker":"coach","text":"...","emotion":"smile"}]}.',
+          'Verdict already shown to the learner: ' + ((lines[0] && lines[0].text) || ''),
+          this.progressBlock(eng),
+          'User said: ' + ctx.text
+        ].join('\n');
+        const got = this.normalizeLines(this.parseJSON(await this.generate(prompt, LINES_SCHEMA)), ['coach'], !!(eng.p && eng.p.driving));
+        if (got[0]) lines.splice(1, 0, got[0]);
+        this.remember(ctx.text, got.length ? got : lines.slice(0, 1));
+      } catch (e) {
+        if (e && e.status === 429) lines.unshift({ speaker: 'coach', text: RATE_LINE });
+      }
+      return lines;
+    },
+    async reflect(ctx, eng) {
+      const lines = await ctx.scripted();
+      try {
+        const prompt = [
+          'Adults only. Respectful coaching. No sexual content.',
+          this.persona('amara'),
+          'Rephrase only the acknowledgement of what the user just said. Do not ask the next question. Do not mention XP.',
+          'Stay close to this acknowledgement: ' + ((lines[0] && lines[0].text) || ''),
+          this.lengthRule(eng),
+          'Return JSON {"lines":[{"speaker":"coach","text":"...","emotion":"smile"}]}.',
+          this.areaContext(eng),
+          this.progressBlock(eng),
+          'User said: ' + ctx.text
+        ].join('\n');
+        const got = this.normalizeLines(this.parseJSON(await this.generate(prompt, LINES_SCHEMA)), ['coach'], !!(eng.p && eng.p.driving));
+        if (got[0] && lines[0] && lines[0].speaker === 'coach') {
+          lines[0].text = got[0].text;
+          if (got[0].emotion) lines[0].emotion = got[0].emotion;
+        }
+        this.remember(ctx.text, lines);
+      } catch (e) {
+        if (e && e.status === 429) lines.unshift({ speaker: 'coach', text: RATE_LINE });
+      }
+      return lines;
+    },
+    async chat(ctx, eng) {
+      const driving = !!(eng.p && eng.p.driving);
+      try {
+        const prompt = [
+          'Adults only. Respectful life coaching. No sexual content, no pressure, no appearance ratings, no contact details.',
+          this.persona('amara'),
+          'You are Coach Amara. Speak only as coach. If they want a scored activity, suggest social, communication, or Security plus.',
+          this.lengthRule(eng),
+          'Return JSON {"lines":[{"speaker":"coach","text":"...","emotion":"smile"}]}. emotion is smile, concern, laugh, or surprise.',
+          this.areaContext(eng),
+          this.progressBlock(eng),
+          'User said: ' + ctx.text
+        ].join('\n');
+        const got = this.normalizeLines(this.parseJSON(await this.generate(prompt, LINES_SCHEMA)), ['coach'], driving);
+        if (!got.length) return ctx.scripted();
+        this.remember(ctx.text, got);
+        return got;
+      } catch (e) {
+        const lines = await ctx.scripted();
+        return (e && e.status === 429) ? this.rate(lines) : lines;
+      }
+    }
+  };
+
+  function createLLMProvider(config) {
+    return Object.assign(Object.create(LLMProvider), config || {});
+  }
+
+  // Older optional adapter. This page does not construct it and it ships no key.
   function makeHttpProvider({ endpoint, model }) {
     return { name: 'http', async respond(ctx, eng) {
       try {
@@ -285,6 +681,6 @@
     } };
   }
 
-  const api = { Engine, newProfile, level, awardXP, touchStreak, ScriptedProvider, LLMProvider, makeHttpProvider };
+  const api = { Engine, newProfile, level, awardXP, touchStreak, ScriptedProvider, LLMProvider, createLLMProvider, makeHttpProvider };
   if (typeof module !== 'undefined') module.exports = api; else root.BrimEngine = api;
 })(this);
