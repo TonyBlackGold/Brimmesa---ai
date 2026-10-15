@@ -123,23 +123,31 @@
   let face = null, facePromise = null, faceFailed = false;
   function avatarPref() { return localStorage.getItem('brimmesa.avatar'); }
   function webglOk() {
+    let gl = null;
     try {
       const c = document.createElement('canvas');
-      return !!(c.getContext('webgl2') || c.getContext('webgl'));
+      c.width = 8; c.height = 8;
+      gl = c.getContext('webgl2') || c.getContext('webgl');
+      return !!gl;
     } catch (e) { return false; }
+    finally {
+      try {
+        const ext = gl && gl.getExtension('WEBGL_lose_context');
+        if (ext) ext.loseContext();
+      } catch (e) {}
+    }
   }
-  function lowEnd() {
-    const mem = navigator.deviceMemory;
-    const cores = navigator.hardwareConcurrency;
-    if (typeof mem === 'number' && mem > 0 && mem <= 2) return true;
-    if (typeof cores === 'number' && cores > 0 && cores <= 2) return true;
-    return false;
+  function want3d() { return avatarPref() !== 'portrait'; }
+  function showRetry(on) { if ($('retry3d')) $('retry3d').hidden = !on; }
+  function setLoading(pct) {
+    const n = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
+    $('honest').textContent = 'Loading 3D Amara… ' + n + '%';
   }
-  function want3d() {
-    const pref = avatarPref();
-    if (pref === 'portrait') return false;
-    if (pref === '3d') return true;
-    return webglOk() && !lowEnd();
+  function failText(err) {
+    const raw = err && err.message ? String(err.message) : String(err || 'unknown error');
+    const clean = raw.replace(/\s+/g, ' ').trim().slice(0, 160) || 'unknown error';
+    if (/webgl/i.test(clean)) return 'Still portrait: WebGL unavailable';
+    return 'model failed to load: ' + clean;
   }
   function showPortrait(reason) {
     $('heroFrame').classList.remove('is-3d');
@@ -151,17 +159,28 @@
     $('heroFrame').classList.add('is-3d');
     document.body.dataset.avatarMode = '3d';
     $('honest').textContent = '3D coach · text-timed lip sync, not a recording';
+    showRetry(false);
   }
   function ensureFace() {
-    if (!want3d() || faceFailed) return Promise.resolve(null);
+    if (!want3d()) return Promise.resolve(null);
     if (face) return Promise.resolve(face);
     if (facePromise) return facePromise;
+    if (!webglOk()) {
+      faceFailed = true;
+      showPortrait('Still portrait: WebGL unavailable');
+      showRetry(true);
+      return Promise.resolve(null);
+    }
+    showRetry(false);
+    setLoading(0);
     const amara = cast.find(c => c.id === 'amara');
     facePromise = import('./avatar/stage.js').then(mod => mod.mount($('avatarMount'), {
       profile: amara,
-      modelUrl: amara && amara.avatarModel
+      modelUrl: amara && amara.avatarModel,
+      onProgress: pct => setLoading(Math.round(8 + pct * 0.92))
     })).then(api => {
       face = api;
+      faceFailed = false;
       showStage();
       if (document.body.dataset.view !== 'home') api.setVisible(false);
       return api;
@@ -169,19 +188,21 @@
       console.error(err);
       faceFailed = true;
       facePromise = null;
-      showPortrait('Still portrait · 3D unavailable on this device');
-      if ($('avatar3d')) $('avatar3d').checked = false;
+      showPortrait(failText(err));
+      showRetry(true);
       return null;
     });
     return facePromise;
   }
   function bootAvatar() {
     const box = $('avatar3d');
-    if (box) box.checked = want3d();
-    if (!want3d()) { showPortrait(); return; }
-    const run = () => ensureFace();
-    if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 1800 });
-    else setTimeout(run, 600);
+    const on = want3d();
+    if (box) box.checked = on;
+    if (!on) { showPortrait('Still portrait · no lip sync'); showRetry(false); return; }
+    showRetry(false);
+    setLoading(0);
+    if (window.requestAnimationFrame) requestAnimationFrame(() => ensureFace());
+    else setTimeout(() => ensureFace(), 0);
   }
 
   const synth = window.speechSynthesis; let voices = [], unlocked = false;
@@ -703,11 +724,34 @@
     localStorage.setItem('brimmesa.avatar', e.target.checked ? '3d' : 'portrait');
     if (e.target.checked) {
       faceFailed = false;
+      if (face) {
+        showStage();
+        if (document.body.dataset.view === 'home') face.setVisible(true);
+        return;
+      }
+      facePromise = null;
       ensureFace().then(api => { if (api && document.body.dataset.view === 'home') api.setVisible(true); });
     } else if (face) {
       face.setVisible(false);
-      showPortrait();
-    } else showPortrait();
+      showPortrait('Still portrait · no lip sync');
+      showRetry(false);
+    } else {
+      showPortrait('Still portrait · no lip sync');
+      showRetry(false);
+    }
+  };
+  if ($('retry3d')) $('retry3d').onclick = () => {
+    localStorage.setItem('brimmesa.avatar', '3d');
+    if ($('avatar3d')) $('avatar3d').checked = true;
+    faceFailed = false;
+    facePromise = null;
+    if (face) { try { face.dispose(); } catch (err) {} face = null; }
+    const node = $('avatarMount');
+    if (node) node.replaceChildren();
+    $('heroFrame').classList.remove('is-3d');
+    showRetry(false);
+    setLoading(0);
+    ensureFace().then(api => { if (api && document.body.dataset.view === 'home') api.setVisible(true); });
   };
   bootAvatar();
   $('focusEdit').onclick = () => document.body.classList.add('nav-open');

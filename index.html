@@ -133,11 +133,20 @@ header.top {
   content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background: linear-gradient(180deg, rgba(0,0,0,.05) 30%, rgba(0,0,0,.25) 62%, rgba(7,8,12,.78));
 }
+.hero-status {
+  position: absolute; z-index: 2; top: 12px; left: 12px; right: 12px;
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center; pointer-events: none;
+}
 .honest {
-  position: absolute; z-index: 2; top: 12px; left: 12px; margin: 0;
-  font-size: 11px; letter-spacing: .04em; color: #f3e6c8;
+  position: static; margin: 0; max-width: 100%;
+  font-size: 11px; letter-spacing: .04em; line-height: 1.35; color: #f3e6c8;
   background: rgba(0,0,0,.45); border: 1px solid rgba(224,182,90,.35); border-radius: 999px; padding: 4px 8px;
 }
+button.retry3d {
+  pointer-events: auto; border: 1px solid rgba(224,182,90,.55); background: rgba(0,0,0,.62);
+  color: #f3d48a; border-radius: 999px; padding: 4px 10px; min-height: 32px; font-size: 12px;
+}
+button.retry3d[hidden] { display: none !important; }
 .bubble {
   position: absolute; z-index: 2; left: 16px; right: 16px; bottom: 64px;
   max-width: 460px; padding: 12px 14px; border-radius: 16px;
@@ -390,7 +399,10 @@ input[type=checkbox] { width: 22px; height: 22px; }
           <div class="hero-frame" id="heroFrame" data-avatar data-speaker="amara" data-state="idle">
             <img id="heroImg" data-portrait="amara" alt="Still portrait of Coach Amara, a fictional coach" src="assets/amara.webp">
             <div id="avatarMount"></div>
-            <p class="honest" id="honest">Still portrait · no lip sync</p>
+            <div class="hero-status">
+              <p class="honest" id="honest">Still portrait · no lip sync</p>
+              <button class="retry3d" id="retry3d" type="button" hidden>Retry 3D</button>
+            </div>
             <div class="bubble">
               <p class="who" id="bubbleName">Coach Amara</p>
               <p id="caption">I'm Amara, your coach. What should I call you?</p>
@@ -498,7 +510,7 @@ input[type=checkbox] { width: 22px; height: 22px; }
   <h3>Settings</h3>
   <label class="row"><input type="checkbox" id="drive"> Driving mode (short, audio only)</label>
   <label class="row"><input type="checkbox" id="auto" checked> Hands-free (keep listening)</label>
-  <label class="row"><input type="checkbox" id="avatar3d"> Animated 3D coach</label>
+  <label class="row"><input type="checkbox" id="avatar3d" checked> Animated 3D coach</label>
   <p class="fine">Stylized 3D with text-timed lip sync. Off keeps the still portrait. Nothing is uploaded.</p>
   <h4>AI brain</h4>
   <label class="field" for="geminiModel">Model</label>
@@ -530,8 +542,22 @@ input[type=checkbox] { width: 22px; height: 22px; }
   </div>
 </dialog>
 
+<script>
+try {
+  if (localStorage.getItem('brimmesa.avatar') !== 'portrait') {
+    var honest = document.getElementById('honest');
+    if (honest) honest.textContent = 'Loading 3D Amara… 0%';
+  }
+} catch (e) {}
+</script>
 <script src="engine.js"></script>
 <script src="app.js"></script>
-<script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});</script>
+<script>
+if ('serviceWorker' in navigator) {
+  var hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', function () { if (hadController) location.reload(); });
+  navigator.serviceWorker.register('sw.js').catch(function () {});
+}
+</script>
 </body>
 </html>

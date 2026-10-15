@@ -13,7 +13,10 @@ const MODEL = new URL('./models/amara.glb', import.meta.url).href;
 export async function mount(node, options) {
   options = options || {};
   const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-  const head = new TalkingHead(node, {
+  if (node) node.replaceChildren();
+  let head = null;
+  try {
+  head = new TalkingHead(node, {
     lipsyncLang: 'en',
     lipsyncModules: ['en'],
     cameraView: 'upper',
@@ -38,8 +41,17 @@ export async function mount(node, options) {
   const character = new Character(head, new LipsyncEn(), options.profile || null);
   character.color = new THREE.Color(0x14110c);
   const model = options.modelUrl || (options.profile && options.profile.avatarModel) || MODEL;
-  await character.load({ url: new URL(model, document.baseURI).href, body: options.body || 'F' });
+  await character.load({
+    url: new URL(model, document.baseURI).href,
+    body: options.body || (options.profile && options.profile.body) || 'F',
+    onprogress: options.onProgress
+  });
   if (head.scene) head.scene.background = new THREE.Color(0x14110c);
   character.setState('idle');
   return character;
+  } catch (err) {
+    try { if (head && head.dispose) head.dispose(); } catch (e) {}
+    if (node) node.replaceChildren();
+    throw err;
+  }
 }

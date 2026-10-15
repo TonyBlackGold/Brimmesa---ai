@@ -60,11 +60,15 @@ export class Character {
     const url = typeof model === 'string' ? model : model && model.url;
     if (!url) throw new Error('Character.load needs a model url');
     const body = (model && model.body) || this.profile.body || 'F';
+    const onprogress = model && model.onprogress;
     await this.head.showAvatar({
       url,
       body,
       avatarMood: 'neutral',
       lipsyncLang: 'en'
+    }, (ev) => {
+      if (typeof onprogress !== 'function' || !ev || !ev.total) return;
+      onprogress(Math.max(0, Math.min(100, Math.round(100 * ev.loaded / ev.total))));
     });
     this.modelUrl = url;
     this.applyPersonality();
@@ -299,6 +303,9 @@ export class Character {
   dispose() {
     if (this.gestureTimer) clearTimeout(this.gestureTimer);
     this.gestureTimer = 0;
+    const head = this.head;
+    this.head = null;
+    try { if (head && head.dispose) head.dispose(); } catch (e) {}
   }
 }
 
