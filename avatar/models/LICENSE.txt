@@ -1,0 +1,12 @@
+Coach Amara's 3D model (amara.glb) is the TalkingHead sample avatar mpfb.glb,
+created with Blender and the MPFB extension from MakeHuman community assets.
+
+License: CC0 1.0 Universal
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Source: https://github.com/met4citizen/TalkingHead/blob/main/avatars/mpfb.glb
+Author note: https://github.com/met4citizen/TalkingHead (example avatar "mpfb.glb", CC0)
+
+This copy is Draco-compressed and uses WebP textures so the page can lazy-load it.
+Morph normals were dropped. The mesh, rig, and facial visemes are the CC0 sample.
+No rights reserved. Redistribution is permitted, including on this public site.

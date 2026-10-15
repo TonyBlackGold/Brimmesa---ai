@@ -18,8 +18,8 @@ A provider is `{ name, enabled, respond(ctx, engine) }`. `respond` returns `[{ s
 
 Progress stays on the device under `brimmesa.profile.v1`: name, XP, level, streak, mastery, and short summaries. Audio is not stored. Roadmap percentages are mastery scores, or zero when nothing has been scored.
 
-`setAvatarState('idle' | 'listening' | 'speaking', { viseme })` is the hook for a future face model. `viseme` is stored and not drawn. The gold pulse is a speaking light, not a mouth.
+`setAvatarState('idle' | 'listening' | 'speaking' | 'thinking', { speaker, viseme })` drives the portraits and, when 3D is on, Coach Amara. See `AVATARS.md`. The 3D module is `avatar/` and loads only after first paint. Lip sync is timed from the spoken text, because `speechSynthesis` does not expose audio. The still portrait remains when 3D is off or WebGL fails.
 
 ## Next phase
 
-A server-side proxy can enable `LLMProvider` without putting a key in the browser. Lip sync can read `setAvatarState`. The empty areas need real activities. Accounts, cloud voices, and payments stay off until they are explicitly chosen.
+A server-side proxy can enable `LLMProvider` without putting a key in the browser. Other characters can reuse `Character.load` once each has a redistributable rig. The empty areas need real activities. Accounts, cloud voices, and payments stay off until they are explicitly chosen.

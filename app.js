@@ -75,13 +75,14 @@
     return areas.length ? Math.round(areas.reduce((sum, area) => sum + areaPercent(area), 0) / areas.length) : 0;
   }
 
-  // Avatar hook for a future lip-sync / expression model.
-  // state: 'idle' | 'listening' | 'speaking'. detail.viseme is stored and not animated.
+  // Avatar hook. The 3D coach, when it is loaded, follows the same states.
+  // state: 'idle' | 'listening' | 'speaking' | 'thinking'.
   function setAvatarState(state, detail) {
     detail = detail || {};
     const speaker = detail.speaker || 'coach';
     const viseme = detail.viseme || '';
-    document.body.dataset.voice = state === 'listening' || state === 'speaking' ? state : 'idle';
+    const known = state === 'listening' || state === 'speaking' || state === 'thinking';
+    document.body.dataset.voice = known ? state : 'idle';
     document.querySelectorAll('[data-avatar]').forEach(node => {
       const who = node.getAttribute('data-speaker');
       const match = who === speaker || ((speaker === 'coach' || speaker === 'amara') && (who === 'amara' || who === 'coach'));
@@ -91,9 +92,78 @@
         else delete node.dataset.viseme;
       } else node.dataset.state = 'idle';
     });
-    $('micLabel').textContent = state === 'listening' ? 'Listening' : state === 'speaking' ? 'Speaking' : 'Tap to Talk';
+    $('micLabel').textContent = state === 'listening' ? 'Listening' : state === 'speaking' ? 'Speaking' : state === 'thinking' ? 'Thinking' : 'Tap to Talk';
+    if (face) {
+      const amara = speaker === 'coach' || speaker === 'amara';
+      face.setState(amara || state === 'idle' ? (known ? state : 'idle') : 'idle');
+      if (amara && viseme) face.viseme(viseme);
+    }
   }
   window.setAvatarState = setAvatarState;
+
+  let face = null, facePromise = null, faceFailed = false;
+  function avatarPref() { return localStorage.getItem('brimmesa.avatar'); }
+  function webglOk() {
+    try {
+      const c = document.createElement('canvas');
+      return !!(c.getContext('webgl2') || c.getContext('webgl'));
+    } catch (e) { return false; }
+  }
+  function lowEnd() {
+    const mem = navigator.deviceMemory;
+    const cores = navigator.hardwareConcurrency;
+    if (typeof mem === 'number' && mem > 0 && mem <= 2) return true;
+    if (typeof cores === 'number' && cores > 0 && cores <= 2) return true;
+    return false;
+  }
+  function want3d() {
+    const pref = avatarPref();
+    if (pref === 'portrait') return false;
+    if (pref === '3d') return true;
+    return webglOk() && !lowEnd();
+  }
+  function showPortrait(reason) {
+    $('heroFrame').classList.remove('is-3d');
+    document.body.dataset.avatarMode = 'portrait';
+    $('honest').textContent = reason || 'Still portrait · no lip sync';
+  }
+  function showStage() {
+    $('avatarMount').style.opacity = '';
+    $('heroFrame').classList.add('is-3d');
+    document.body.dataset.avatarMode = '3d';
+    $('honest').textContent = '3D coach · text-timed lip sync, not a recording';
+  }
+  function ensureFace() {
+    if (!want3d() || faceFailed) return Promise.resolve(null);
+    if (face) return Promise.resolve(face);
+    if (facePromise) return facePromise;
+    const amara = cast.find(c => c.id === 'amara');
+    facePromise = import('./avatar/stage.js').then(mod => mod.mount($('avatarMount'), {
+      profile: amara,
+      modelUrl: amara && amara.avatarModel
+    })).then(api => {
+      face = api;
+      showStage();
+      if (document.body.dataset.view !== 'home') api.setVisible(false);
+      return api;
+    }).catch(err => {
+      console.error(err);
+      faceFailed = true;
+      facePromise = null;
+      showPortrait('Still portrait · 3D unavailable on this device');
+      if ($('avatar3d')) $('avatar3d').checked = false;
+      return null;
+    });
+    return facePromise;
+  }
+  function bootAvatar() {
+    const box = $('avatar3d');
+    if (box) box.checked = want3d();
+    if (!want3d()) { showPortrait(); return; }
+    const run = () => ensureFace();
+    if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 1800 });
+    else setTimeout(run, 600);
+  }
 
   const synth = window.speechSynthesis; let voices = [], unlocked = false;
   const loadVoices = () => {
@@ -105,6 +175,14 @@
   };
   if (synth) { loadVoices(); synth.onvoiceschanged = loadVoices; setTimeout(loadVoices, 500); setTimeout(loadVoices, 2000); }
   const castOrder = ['coach', 'jasmine', 'renee', 'marcus'];
+  function profileFor(id) {
+    return cast.find(c => c.speakerId === id || (id === 'coach' && c.id === 'amara')) || null;
+  }
+  function voiceCfg(id) {
+    const base = (chars[id] || chars.coach).voice || {};
+    const row = profileFor(id);
+    return Object.assign({}, base, (row && row.voice) || {});
+  }
   function voiceFor(id, cfg) {
     if (!voices.length) return null;
     const pref = (cfg.prefer || []).map(s => voices.find(v => v.name.includes(s))).find(Boolean);
@@ -113,11 +191,14 @@
     return voices[i % voices.length];
   }
   function unlockAudio() {
-    if (!synth || unlocked) return;
+    if (unlocked) return;
     unlocked = true;
-    try { synth.cancel(); const u = new SpeechSynthesisUtterance(' '); u.volume = 0; synth.speak(u); synth.resume(); } catch (e) {}
+    if (synth) {
+      try { synth.cancel(); const u = new SpeechSynthesisUtterance(' '); u.volume = 0; synth.speak(u); synth.resume(); } catch (e) {}
+    }
+    if (face) face.resume();
   }
-  function speakChunk(text, voice, pitch, rate) {
+  function speakChunk(text, voice, pitch, rate, onutter) {
     return new Promise(res => {
       const u = new SpeechSynthesisUtterance(text);
       if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = 'en-US';
@@ -126,18 +207,24 @@
       const fin = () => { if (!done) { done = true; clearTimeout(t); res(); } };
       const t = setTimeout(fin, 1500 + text.length * 90 / rate);
       u.onend = u.onerror = fin;
+      if (onutter) onutter(u);
       synth.speak(u);
     });
   }
+  function isAmara(speaker) { return speaker === 'coach' || speaker === 'amara'; }
   async function speak(line) {
     if (!synth) return;
-    const cfg = (chars[line.speaker] || chars.coach).voice || {};
+    const cfg = voiceCfg(line.speaker);
     const v = voiceFor(line.speaker, cfg);
     let pitch = cfg.pitch || 1, rate = (cfg.rate || 1) * (eng.p.driving ? 1.05 : 1);
     if (voices.length < 2 && line.speaker !== 'coach') pitch = Math.min(2, Math.max(0.1, 1 + (pitch - 1) * 1.8));
     for (const part of line.text.match(/[^.!?]+[.!?]*/g) || [line.text]) {
       if (stopSpeaking) break;
-      await speakChunk(part.trim(), v, pitch, rate);
+      const text = part.trim();
+      if (!text) continue;
+      const moving = face && isAmara(line.speaker);
+      if (moving) face.speak(text, { rate, pitch, emotion: line.emotion || null });
+      await speakChunk(text, v, pitch, rate, moving ? u => face.bindUtterance(u) : null);
     }
   }
   let stopSpeaking = false, busy = false, playId = 0, greeted = false, listening = false, gotResult = false, misses = 0;
@@ -196,12 +283,16 @@
     greeted = true;
     interrupt();
     show({ speaker: 'user', text: value });
+    try {
+      const emotion = (await import('./avatar/lipsync.js')).emotionFromText(value);
+      if (emotion && face) face.react(emotion);
+    } catch (e) {}
     const lines = await eng.handle(value);
     if ((eng.mode === 'area' || eng.mode === 'reflect') && eng.area) { setRoute('#/area/' + eng.area.id); showArea(eng.area); }
     else showHome();
     play(lines);
   }
-  function interrupt() { stopSpeaking = true; playId++; busy = false; if (synth) synth.cancel(); }
+  function interrupt() { stopSpeaking = true; playId++; busy = false; if (synth) synth.cancel(); if (face) face.interrupt(); }
 
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let rec = null;
@@ -257,10 +348,12 @@
     document.querySelectorAll('[data-area]').forEach(btn => btn.classList.remove('on'));
     document.body.classList.remove('nav-open');
     $('tabHome').classList.add('on');
+    if (face) face.setVisible(true);
   }
   function showArea(area) {
     document.body.dataset.view = 'area';
     $('areaView').hidden = false;
+    if (face) face.setVisible(false);
     $('areaKicker').textContent = area.summary;
     $('areaTitle').textContent = area.title;
     $('areaLead').textContent = area.intro;
@@ -545,6 +638,17 @@
   $('settingsBtn').onclick = () => $('settingsDlg').showModal();
   $('settingsClose').onclick = () => $('settingsDlg').close();
   $('drive').onchange = e => send(e.target.checked ? 'driving mode on' : 'driving mode off');
+  $('avatar3d').onchange = e => {
+    localStorage.setItem('brimmesa.avatar', e.target.checked ? '3d' : 'portrait');
+    if (e.target.checked) {
+      faceFailed = false;
+      ensureFace().then(api => { if (api && document.body.dataset.view === 'home') api.setVisible(true); });
+    } else if (face) {
+      face.setVisible(false);
+      showPortrait();
+    } else showPortrait();
+  };
+  bootAvatar();
   $('focusEdit').onclick = () => document.body.classList.add('nav-open');
   $('focusGo').onclick = () => {
     const id = $('focusGo').dataset.activity;
