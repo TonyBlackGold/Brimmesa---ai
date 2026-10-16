@@ -310,6 +310,49 @@ button.ghost {
 }
 .presenter-restore[hidden] { display: none !important; }
 .presenter-restore[data-state="speaking"] { box-shadow: 0 0 0 3px rgba(224, 182, 90, .35); }
+.aria-walker { pointer-events: none; z-index: 28; }
+.aria-walker[hidden] { display: none !important; }
+.aria-walker.corner {
+  position: fixed; right: 8px; bottom: calc(74px + env(safe-area-inset-bottom));
+  width: min(30vw, 124px); aspect-ratio: 112 / 198;
+}
+.aria-walker.stepping { position: fixed; width: min(30vw, 124px); aspect-ratio: 112 / 198; }
+.aria-walker.on-map {
+  position: absolute; width: 15%; aspect-ratio: 112 / 198; z-index: 4;
+  transform: translate(-50%, -92%);
+}
+.aria-walker canvas { width: 100%; height: 100%; display: block; filter: drop-shadow(0 2px 2px rgba(0,0,0,.45)); }
+.aria-walker.face-right canvas { transform: scaleX(-1); }
+.walk-trail { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; overflow: visible; }
+.walk-trail .glow { fill: none; stroke: rgba(243, 212, 138, .45); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.walk-trail .core {
+  fill: none; stroke: #f3d48a; stroke-width: .7; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 1.5 1.2; animation: trailMove .8s linear infinite;
+}
+@keyframes trailMove { to { stroke-dashoffset: -2.7; } }
+.walk-catch {
+  position: fixed; inset: 0; z-index: 26; background: transparent; border: 0; padding: 0; margin: 0;
+}
+.walk-skip {
+  position: fixed; left: 12px; bottom: calc(78px + env(safe-area-inset-bottom)); z-index: 36;
+  min-height: 36px; padding: 6px 14px; border-radius: 999px;
+  border: 1px solid rgba(224, 182, 90, .75); background: rgba(12, 10, 8, .9); color: #f3d48a; font-size: 13px;
+}
+.approach-frame {
+  position: fixed; left: 50%; bottom: calc(92px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  width: min(46vw, 196px); aspect-ratio: 9 / 16; z-index: 33; padding: 0; overflow: hidden;
+  border-radius: 18px; border: 1px solid rgba(224, 182, 90, .7); background: #100e0a;
+  box-shadow: 0 16px 40px rgba(0,0,0,.5);
+}
+.approach-frame[hidden] { display: none !important; }
+.approach-frame video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.approach-cap {
+  position: absolute; right: 8px; top: 8px; padding: 3px 8px; border-radius: 999px;
+  background: rgba(8, 7, 5, .72); color: #f3d48a; font-size: 11px; letter-spacing: .04em;
+}
+@media (prefers-reduced-motion: reduce) {
+  .walk-trail .core { animation: none; }
+}
 .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 35; }
 @media (max-width: 720px) {
   header.top { flex-wrap: wrap; align-items: flex-start; row-gap: 8px; }
@@ -790,6 +833,7 @@ input[type=checkbox] { width: 22px; height: 22px; }
 <script src="library.js"></script>
 <script src="speech.js"></script>
 <script src="presenter.js"></script>
+<script src="walk.js"></script>
 <script src="app.js"></script>
 <script>
 if ('serviceWorker' in navigator) {

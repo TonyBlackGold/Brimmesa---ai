@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "aria": {
+    "label": "Aria",
+    "sheet": "assets/aria-walk-sheet.webp",
+    "frames": 32,
+    "cols": 8,
+    "frameWidth": 112,
+    "frameHeight": 198,
+    "fps": 8,
+    "facing": "left"
+  },
+  "coaches": {
+    "marcus": {
+      "dest": "skills",
+      "from": "central",
+      "waypoints": [[58, 52], [52, 50], [46, 47], [41, 48], [37, 50]],
+      "approach": {
+        "mp4": "assets/marcus-approach.mp4",
+        "poster": "assets/marcus-approach-poster.webp",
+        "maxMs": 3400
+      },
+      "talk": {
+        "label": "Marcus",
+        "mp4": "assets/marcus-talk.mp4",
+        "poster": "assets/marcus-talk-poster.webp"
+      }
+    }
+  }
+}

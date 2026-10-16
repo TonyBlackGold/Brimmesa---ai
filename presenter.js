@@ -136,6 +136,66 @@
     if (active) show(active);
   }
 
+  let once = null;
+  let onceVideo = null;
+  let onceTimer = null;
+  let onceFinish = null;
+
+  function mountOnce() {
+    once = document.createElement('div');
+    once.id = 'approachFrame';
+    once.className = 'approach-frame';
+    once.hidden = true;
+    onceVideo = document.createElement('video');
+    onceVideo.muted = true;
+    onceVideo.defaultMuted = true;
+    onceVideo.setAttribute('muted', '');
+    onceVideo.playsInline = true;
+    onceVideo.setAttribute('playsinline', '');
+    onceVideo.setAttribute('webkit-playsinline', '');
+    onceVideo.preload = 'none';
+    onceVideo.loop = false;
+    const cap = document.createElement('span');
+    cap.className = 'approach-cap';
+    cap.textContent = 'Skip';
+    once.append(onceVideo, cap);
+    once.addEventListener('click', function () { if (onceFinish) onceFinish(); });
+    document.body.append(once);
+  }
+  function stopOnce() {
+    if (onceFinish) onceFinish();
+  }
+  function playOnce(spec) {
+    return new Promise(function (resolve) {
+      if (!spec || !spec.mp4) { resolve(false); return; }
+      if (!once) mountOnce();
+      stopOnce();
+      once.hidden = false;
+      if (onceVideo.getAttribute('src') !== spec.mp4) {
+        onceVideo.poster = spec.poster || '';
+        onceVideo.preload = 'none';
+        onceVideo.src = spec.mp4;
+      }
+      try { onceVideo.currentTime = 0; } catch (e) {}
+      let settled = false;
+      const finish = function () {
+        if (settled) return;
+        settled = true;
+        clearTimeout(onceTimer);
+        onceVideo.onended = null;
+        try { onceVideo.pause(); } catch (e) {}
+        if (once) once.hidden = true;
+        if (onceFinish === finish) onceFinish = null;
+        resolve(true);
+      };
+      onceFinish = finish;
+      onceVideo.onended = finish;
+      onceTimer = setTimeout(finish, spec.maxMs > 0 ? spec.maxMs : 3400);
+      const pending = onceVideo.play();
+      if (pending && pending.catch) pending.catch(function () { finish(); });
+    });
+  }
+
   root.BrimPresenter = {
     register: function (id, spec) { if (id && spec && spec.mp4) PRESENTERS[id] = spec; },
     known: known,
@@ -144,6 +204,8 @@
     setState: setState,
     minimize: minimize,
     restore: restore,
-    current: function () { return active; }
+    current: function () { return active; },
+    playOnce: playOnce,
+    stopOnce: stopOnce
   };
 })(window);

@@ -1229,7 +1229,13 @@
     ensureFace().then(api => { if (api && document.body.dataset.view === 'home') api.setVisible(true); });
   };
   window.BrimFuture = BrimEngine.futureHooks || { realisticAvatar: { implemented: false }, heygen: { implemented: false } };
-  window.BrimFuture.walkTo = { implemented: false, async play() { return false; } };
+  window.BrimFuture.walkTo = {
+    implemented: true,
+    async play(opts) {
+      if (!window.BrimWalk) return false;
+      return window.BrimWalk.play(opts || {});
+    }
+  };
   const voiceBox = $('voicePreviews');
   if (voiceBox) cast.forEach(row => {
     const b = document.createElement('button');
@@ -2090,11 +2096,19 @@
       lastTopic: ''
     };
     hostLock = true;
+    let canWalk = false;
+    if (window.BrimWalk) {
+      try { canWalk = await window.BrimWalk.prepare(coach.id); } catch (e) { canWalk = false; }
+    }
+    let duringIntro = true;
+    if (canWalk) window.BrimWalk.cueCorner({ onSkip: () => { if (duringIntro) interrupt(); } });
     await play([{ speaker: 'aria', text: intent.line }]);
+    duringIntro = false;
     showHome();
     let walked = false;
-    if (window.BrimFuture && window.BrimFuture.walkTo && window.BrimFuture.walkTo.implemented) {
-      try { walked = await window.BrimFuture.walkTo.play({ coachId: coach.id, dest: dest || null }); } catch (e) { walked = false; }
+    if (canWalk && window.BrimWalk) {
+      try { walked = await window.BrimWalk.play({ coachId: coach.id, dest: dest || null }); }
+      catch (e) { walked = false; if (window.BrimWalk.cancel) window.BrimWalk.cancel(); }
     }
     if (!walked && dest && window.BrimMap) window.BrimMap.focus(dest.x, dest.y);
     showVisit(coach);
