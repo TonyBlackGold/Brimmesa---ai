@@ -195,6 +195,10 @@
     }
   }
   function want3d() { return avatarPref() !== 'portrait'; }
+  function preview3d() {
+    try { return new URLSearchParams(location.search).get('preview3d') === '1'; }
+    catch (e) { return false; }
+  }
   function showRetry(on) { if ($('retry3d')) $('retry3d').hidden = !on; }
   function setLoading(pct, phase) {
     const n = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
@@ -220,11 +224,11 @@
   function failText(err) {
     const clean = errorText(err).replace(/\s+/g, ' ').trim().slice(0, 180) || 'unknown error';
     if (/webgl/i.test(clean)) return 'Still portrait: WebGL unavailable';
-    return 'portrait did not start: ' + clean;
+    return (preview3d() ? 'preview head did not start: ' : 'portrait did not start: ') + clean;
   }
   function set3dStatus(text) {
     const node = $('avatarStatus');
-    if (node) node.textContent = 'Portrait status: ' + text;
+    if (node) node.textContent = (preview3d() ? 'Preview head: ' : 'Portrait status: ') + text;
   }
   function refresh3dStatus() {
     if (!want3d()) { set3dStatus('off, still portrait'); return; }
@@ -262,7 +266,7 @@
     try { refresh3dStatus(); } catch (e) {}
   }
   function ensureFace() {
-    if (!want3d()) return Promise.resolve(null);
+    if (!want3d() && !preview3d()) return Promise.resolve(null);
     if (face) return Promise.resolve(face);
     if (facePromise) return facePromise;
     if (!webglOk()) {
@@ -272,9 +276,10 @@
       return Promise.resolve(null);
     }
     showRetry(false);
-    set3dStatus('loading portrait');
+    set3dStatus(preview3d() ? 'loading preview head' : 'loading portrait');
     const amara = cast.find(c => c.id === 'amara');
-    facePromise = import('./avatar/portrait.js').then(mod => mod.mount($('avatarMount'), {
+    const loader = preview3d() ? './avatar/preview3d.js' : './avatar/portrait.js';
+    facePromise = import(loader).then(mod => mod.mount($('avatarMount'), {
       profile: amara,
       imageUrl: amara && amara.portrait,
       onReady: api => {
@@ -302,9 +307,9 @@
     const box = $('avatar3d');
     const on = want3d();
     if (box) box.checked = on;
-    if (!on) { showPortrait('Still portrait · no lip sync'); showRetry(false); return; }
+    if (!on && !preview3d()) { showPortrait('Still portrait · no lip sync'); showRetry(false); return; }
     showRetry(false);
-    set3dStatus('loading portrait');
+    set3dStatus(preview3d() ? 'loading preview head' : 'loading portrait');
     if (window.requestAnimationFrame) requestAnimationFrame(() => ensureFace());
     else setTimeout(() => ensureFace(), 0);
   }
