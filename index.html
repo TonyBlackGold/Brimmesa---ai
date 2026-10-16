@@ -240,7 +240,7 @@ button.ghost {
   flex: 1 0 132px; text-align: left; padding: 8px; border-radius: 16px;
   border: 1px solid var(--line); background: #12141c; color: inherit;
 }
-.team-card img { width: 100%; aspect-ratio: 1; object-fit: cover; object-position: center 15%; border-radius: 12px; }
+.team-card img { width: 100%; aspect-ratio: 1; object-fit: cover; object-position: center 32%; border-radius: 12px; }
 .team-card strong { display: block; margin-top: 6px; font-size: 13px; }
 .team-card small { display: block; color: var(--muted); font-size: 11px; line-height: 1.25; }
 .team-card[data-state="speaking"] { box-shadow: 0 0 0 1px #f3d48a, 0 0 18px rgba(224, 182, 90, .55); }
@@ -356,7 +356,7 @@ button.ghost {
 }
 .mission-card h2, .view-panel h2 { font-family: var(--serif); margin: 0 0 6px; font-size: 22px; }
 .aria-card { display: flex; gap: 10px; align-items: flex-start; }
-.aria-card img { width: 84px; height: 108px; object-fit: cover; object-position: center 20%; border-radius: 14px; border: 1px solid var(--line); }
+.aria-card img { width: 84px; height: 108px; object-fit: cover; object-position: center 32%; border-radius: 14px; border: 1px solid var(--line); }
 .goal { display: block; margin-top: 8px; font-size: 12px; color: var(--muted); }
 .goal input {
   display: block; width: 100%; margin-top: 4px; min-height: 40px; border-radius: 10px;
@@ -377,7 +377,9 @@ button.ghost {
 .list-card small { display: block; color: var(--muted); margin-top: 4px; }
 .coach-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .coach-grid button { text-align: left; }
-.coach-grid img { width: 100%; height: 120px; object-fit: cover; border-radius: 12px; }
+.coach-grid img { width: 100%; height: 120px; object-fit: cover; object-position: center 32%; border-radius: 12px; }
+.coach-grid button.featured { grid-column: 1 / -1; border-color: rgba(224, 182, 90, .75); }
+.coach-grid button.featured img { height: 210px; }
 .mic-dock { margin-top: 8px; }
 body[data-view="map"] .shell,
 body[data-view="missions"] .shell,
@@ -390,6 +392,12 @@ body[data-view="coaches"] .timeline,
 body[data-view="scenarios"] .timeline,
 body[data-view="progress"] .timeline { display: none !important; }
 body[data-view="area"] #worldApp { display: none; }
+.shell[hidden], #timeline[hidden] { display: none !important; }
+body[data-view="map"] .menu-btn,
+body[data-view="missions"] .menu-btn,
+body[data-view="coaches"] .menu-btn,
+body[data-view="scenarios"] .menu-btn,
+body[data-view="progress"] .menu-btn { display: none !important; }
 @media (orientation: landscape) and (min-width: 800px) {
   .world-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(260px, .75fr); gap: 12px; align-items: start; }
   .mission-card { margin-top: 8px; }
@@ -507,7 +515,7 @@ input[type=checkbox] { width: 22px; height: 22px; }
   </div>
 
   <div class="scrim" id="scrim"></div>
-  <div class="shell">
+  <div class="shell" hidden>
     <aside class="side" id="side">
       <h2>Life Roadmap</h2>
       <p class="lead">Choose an area to explore.</p>
@@ -527,7 +535,7 @@ input[type=checkbox] { width: 22px; height: 22px; }
             <div id="avatarMount"></div>
             <div class="bubble">
               <p class="who" id="bubbleName">Coach Amara</p>
-              <p id="caption">I'm Amara, your coach. What should I call you?</p>
+              <p id="caption">I'm Aria, your guide. What should I call you?</p>
             </div>
           </div>
         </div>
@@ -550,7 +558,7 @@ input[type=checkbox] { width: 22px; height: 22px; }
           <div id="areaActivities"></div>
           <div id="areaReflect"></div>
           <ul class="soon-list" id="areaComing"></ul>
-          <p><button class="ghost" id="areaBack" type="button">Back to Amara</button></p>
+          <p><button class="ghost" id="areaBack" type="button">Back to the map</button></p>
         </section>
       </section>
     </div>
@@ -587,7 +595,7 @@ input[type=checkbox] { width: 22px; height: 22px; }
     </aside>
   </div>
 
-  <section class="timeline" id="timeline">
+  <section class="timeline" id="timeline" hidden>
     <h2>Your Roadmap Progress</h2>
     <div class="track" id="track"></div>
   </section>

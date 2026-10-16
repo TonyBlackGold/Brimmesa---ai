@@ -50,7 +50,7 @@
 
     welcome() {
       const p = this.p, L = [];
-      if (!p.name) { this.mode = 'askname'; return [this.C("Welcome to BRIMMESA AI. I'm Amara, your personal coach. What should I call you?")]; }
+      if (!p.name) { this.mode = 'askname'; return [this.C("Welcome to BRIMMESA AI. I'm Aria, your guide. What should I call you?")]; }
       let msg = `Welcome back, ${p.name}! You're level ${level(p.xp)} with ${p.xp} XP` + (p.streak ? ` and a ${p.streak}-day streak.` : '.');
       if (p.lastFeedback) msg += ` Last time: ${p.lastFeedback}`;
       L.push(this.C(msg)); L.push(this.menuPrompt()); this.mode = 'menu'; return L;

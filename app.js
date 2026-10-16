@@ -683,6 +683,10 @@
     if (name === 'scenarios') renderScenarios();
     if (name === 'progress') renderProgress();
     if (face) face.setVisible(false);
+    const shell = document.querySelector('.shell');
+    if (shell) shell.hidden = true;
+    const timeline = $('timeline');
+    if (timeline) timeline.hidden = true;
   }
   function showHome(opts) {
     $('areaView').hidden = true;
@@ -693,6 +697,8 @@
   }
   function showArea(area) {
     document.body.dataset.view = 'area';
+    const shell = document.querySelector('.shell');
+    if (shell) shell.hidden = false;
     $('areaView').hidden = false;
     if (face) face.setVisible(false);
     $('areaKicker').textContent = area.summary;
@@ -1216,10 +1222,11 @@
     cast.forEach(c => {
       const b = el('button', 'list-card');
       b.type = 'button';
+      if (c.id === 'aria') b.classList.add('featured');
       const img = el('img');
       img.src = c.portrait;
-      img.alt = '';
-      b.append(img, el('strong', null, c.name), el('small', null, c.role));
+      img.alt = 'Portrait of ' + c.name;
+      b.append(img, el('strong', null, c.name), el('small', null, c.id === 'aria' ? 'Your guide · ' + c.role : c.role));
       b.onclick = () => {
         if (c.id === 'aria') { showHome(); openCentral(); return; }
         if (c.id === 'amara') { launchArea('mindset'); return; }
