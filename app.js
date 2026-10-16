@@ -196,8 +196,15 @@
   }
   function want3d() { return avatarPref() !== 'portrait'; }
   function showRetry(on) { if ($('retry3d')) $('retry3d').hidden = !on; }
-  function setLoading(pct) {
+  function setLoading(pct, phase) {
     const n = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
+    const settingUp = n >= 100 || phase === 'decoder' || phase === 'skeleton' || phase === 'reveal';
+    if (settingUp) {
+      const step = phase === 'skeleton' ? 'skeleton' : phase === 'reveal' ? 'reveal' : 'decoder';
+      $('honest').textContent = 'Setting up 3D Amara…';
+      set3dStatus('setting up ' + step);
+      return;
+    }
     $('honest').textContent = 'Loading 3D Amara… ' + n + '%';
     set3dStatus('loading ' + n + '%');
   }
@@ -246,13 +253,16 @@
     $('honest').textContent = reason || 'Still portrait · no lip sync';
     set3dStatus(reason || 'still portrait');
   }
-  function showStage() {
+  function revealStage() {
     $('heroFrame').classList.add('is-3d');
     document.body.dataset.avatarMode = '3d';
     $('honest').textContent = '3D coach · blinks and lip sync on this device';
     showRetry(false);
-    if (face) face.kick();
-    refresh3dStatus();
+  }
+  function showStage() {
+    revealStage();
+    try { if (face) face.kick(); } catch (e) { if (face) face.lastError = errorText(e); }
+    try { refresh3dStatus(); } catch (e) {}
   }
   function ensureFace() {
     if (!want3d()) return Promise.resolve(null);
@@ -270,7 +280,12 @@
     facePromise = import('./avatar/stage.js').then(mod => mod.mount($('avatarMount'), {
       profile: amara,
       modelUrl: amara && amara.avatarModel,
-      onProgress: pct => setLoading(Math.round(8 + pct * 0.92))
+      onProgress: (pct, phase) => setLoading(Math.round(8 + pct * 0.92), phase),
+      onReady: api => {
+        face = api;
+        faceFailed = false;
+        revealStage();
+      }
     })).then(api => {
       face = api;
       faceFailed = false;

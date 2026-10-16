@@ -8,7 +8,7 @@ Coach Amara is a full-body CC0 GLB (MakeHuman / MPFB) drawn by [TalkingHead 1.7]
 
 License for `avatar/models/amara.glb`: [CC0](https://creativecommons.org/publicdomain/zero/1.0/). Upstream file and statement: [mpfb.glb](https://github.com/met4citizen/TalkingHead/blob/main/avatars/mpfb.glb), noted in the [TalkingHead readme](https://github.com/met4citizen/TalkingHead/blob/main/README.md). The copy here is Draco-compressed with WebP textures (about 6 MB) and is lazy-loaded. Morph normals were removed. It may be redistributed.
 
-Speech tries ElevenLabs first, then Gemini TTS, then `speechSynthesis`. ElevenLabs character timings drive the mouth. Gemini audio uses word timings. The browser voice stays text-timed, because `speechSynthesis` does not hand back audio. Blinks, saccades, breathing, and small head motion come from TalkingHead. The Draco decoder is the three.js r180 build in `avatar/draco/`. The Google hosted decoder crashed on Android (`_free is not a function`), which left the still portrait up. Hand and nod gestures are randomized from each character's profile in `data/characters.json` (`gestureRate`, `expressiveness`, `mannerisms`, `voice`).
+Speech tries ElevenLabs first, then Gemini TTS, then `speechSynthesis`. ElevenLabs character timings drive the mouth. Gemini audio uses word timings. The browser voice stays text-timed, because `speechSynthesis` does not hand back audio. Blinks, saccades, breathing, and small head motion come from TalkingHead. The Draco decoder is the three.js r180 build in `avatar/draco/`. The Google hosted decoder crashed on Android (`_free is not a function`), which left the still portrait up. Reaching 100% only means the GLB bytes arrived. Draco decode, the skeleton, and morph setup run after that. If that step hangs or throws, the label leaves "Loading 3D Amara… 100%" and shows the error, including the last step. A successful load adds `is-3d` and hides the portrait before the first kick. Hand and nod gestures are randomized from each character's profile in `data/characters.json` (`gestureRate`, `expressiveness`, `mannerisms`, `voice`).
 
 ## Character API
 
@@ -23,7 +23,7 @@ Speech tries ElevenLabs first, then Gemini TTS, then `speechSynthesis`. ElevenLa
 
 Full-body later: `slots.rig` is `mixamo-talkinghead`, `slots.cameraView` is `upper` (also accepts `full`, `mid`, `head`), `slots.environment` is empty, and `slots.clips` (`idle`, `listen`, `speak`, `think`) are empty URLs. TalkingHead can `playAnimation` a Mixamo FBX into those slots. No Mixamo files are shipped. Mixamo's own terms allow embedding clips inside a finished product and do not allow redistributing the raw FBX or character files as standalone assets ([Adobe Mixamo FAQ](https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html)).
 
-3D turns off on request (Settings), when WebGL is missing, or on a device with 2 or fewer cores or 2 GB or less of reported memory. The page paints the portrait first and imports the module after idle time.
+3D stays on unless Settings chooses the still portrait, or WebGL itself fails. The page paints the portrait first and imports the module on the next frame. A slow phone is not treated as too small to try.
 
 ## Other free rigs
 
