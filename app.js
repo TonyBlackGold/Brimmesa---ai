@@ -178,10 +178,19 @@
     });
     $('micLabel').textContent = state === 'listening' ? 'Listening' : state === 'speaking' ? 'Speaking' : state === 'thinking' ? 'Thinking' : 'Tap to Talk';
     syncPresenter(known ? state : 'idle', speaker);
+    const amara = speaker === 'coach' || speaker === 'amara';
     if (face) {
-      const amara = speaker === 'coach' || speaker === 'amara';
       face.setState(amara || state === 'idle' ? (known ? state : 'idle') : 'idle');
       if (amara && viseme) face.viseme(viseme);
+    }
+    const talk = $('talkFace');
+    if (talk && !talk.hidden && talk.dataset.mouth === 'pulse') {
+      const who = talk.dataset.coach;
+      const mine = who === speaker || (who === 'amara' && amara) || (who === 'aria' && speaker === 'aria');
+      const amt = mine && state === 'speaking' && window.BrimWorld ? BrimWorld.jawAmount(viseme) : 0;
+      if (mine && state === 'speaking' && !viseme) talk.dataset.speaking = '1';
+      else if (!mine || state !== 'speaking') { talk.dataset.speaking = '0'; talk.style.setProperty('--jaw', '0'); }
+      else talk.style.setProperty('--jaw', String(amt));
     }
   }
   window.setAvatarState = setAvatarState;
@@ -304,9 +313,17 @@
     try { if (face) face.kick(); } catch (e) { if (face) face.lastError = errorText(e); }
     try { refresh3dStatus(); } catch (e) {}
   }
-  function ensureFace() {
+  function ensureFace(mount) {
+    const node = mount || $('talkMount') || $('avatarMount');
     if (!want3d() && !preview3d()) return Promise.resolve(null);
-    if (face) return Promise.resolve(face);
+    if (face) {
+      if (node && face.canvas && face.canvas.parentNode !== node) {
+        node.replaceChildren(face.canvas);
+        face.node = node;
+      }
+      try { face.setVisible(true); face.kick(); } catch (e) {}
+      return Promise.resolve(face);
+    }
     if (facePromise) return facePromise;
     if (!webglOk()) {
       faceFailed = true;
@@ -318,7 +335,7 @@
     set3dStatus(preview3d() ? 'loading preview head' : 'loading portrait');
     const amara = cast.find(c => c.id === 'amara');
     const loader = preview3d() ? './avatar/preview3d.js' : './avatar/portrait.js';
-    facePromise = import(loader).then(mod => mod.mount($('avatarMount'), {
+    facePromise = import(loader).then(mod => mod.mount(node, {
       profile: amara,
       imageUrl: amara && amara.portrait,
       onReady: api => {
@@ -330,7 +347,7 @@
       face = api;
       faceFailed = false;
       showStage();
-      if (document.body.dataset.view !== 'home') api.setVisible(false);
+      if (node && node.id !== 'talkMount' && document.body.dataset.view !== 'home') api.setVisible(false);
       return api;
     }).catch(err => {
       console.error(errorText(err));
@@ -430,6 +447,49 @@
     else if (kind === 'limit') $('note').textContent = "That's today's Gemini voice allowance. I'll use this browser's voice until tomorrow.";
     else if (kind === 'rate') $('note').textContent = "Google's free voice tier is busy. I'll use this browser's voice for now.";
   }
+  let pulseTimer = 0;
+  function stopPulse() {
+    if (pulseTimer) cancelAnimationFrame(pulseTimer);
+    pulseTimer = 0;
+    const box = $('talkFace');
+    if (!box) return;
+    box.style.setProperty('--jaw', '0');
+    if (box.dataset.mouth === 'pulse') box.dataset.speaking = '0';
+  }
+  function roughPulse(text, rate) {
+    const words = String(text || '').split(/\s+/).filter(Boolean);
+    const scale = 1 / Math.max(0.6, Math.min(1.6, rate || 1));
+    let t = 40;
+    const marks = [];
+    words.forEach(word => {
+      const dur = Math.round(Math.max(140, 64 * word.length) * scale);
+      marks.push({ t: t, dur: dur, amt: /[aeiou]/i.test(word) ? 0.85 : 0.32 });
+      t += dur + Math.round(30 * scale);
+    });
+    return { marks: marks, total: t + 120 };
+  }
+  function drivePulse(spec) {
+    stopPulse();
+    const box = $('talkFace');
+    if (!box || box.hidden || box.dataset.mouth === 'warp' || !spec) return;
+    const t0 = performance.now();
+    const step = function (now) {
+      const elapsed = now - t0;
+      let amt = 0;
+      if (spec.vtimes && window.BrimWorld) {
+        for (let i = 0; i < spec.vtimes.length; i++) {
+          if (elapsed >= spec.vtimes[i] && elapsed < spec.vtimes[i] + (spec.vdurations[i] || 80)) amt = BrimWorld.jawAmount(spec.visemes[i]);
+        }
+      } else if (spec.marks) {
+        spec.marks.forEach(mark => { if (elapsed >= mark.t && elapsed < mark.t + mark.dur) amt = mark.amt; });
+      }
+      box.style.setProperty('--jaw', String(amt));
+      box.dataset.speaking = '1';
+      if (elapsed < (spec.total || 1600)) pulseTimer = requestAnimationFrame(step);
+      else stopPulse();
+    };
+    pulseTimer = requestAnimationFrame(step);
+  }
   function playbackContext(line) {
     if (face && isAmara(line && line.speaker) && face.audioContext) {
       const ctx = face.audioContext();
@@ -462,6 +522,7 @@
       await waitMs(Math.ceil((buffer.duration || 0.3) * 1000) + 60);
       return;
     }
+    drivePulse(timed.vtimes ? timed : roughPulse(spoken, 1));
     if (!ctx) return;
     await new Promise(resolve => {
       const src = ctx.createBufferSource();
@@ -539,7 +600,9 @@
     if (voices.length < 2 && line.speaker !== 'coach') pitch = Math.min(2, Math.max(0.1, 1 + (pitch - 1) * 1.8));
     const moving = face && isAmara(line.speaker);
     if (moving) face.speak(spoken, { rate, pitch, emotion: line.emotion || null });
+    else drivePulse(roughPulse(spoken, rate));
     await speakChunk(spoken, v, pitch, rate, moving ? u => face.bindUtterance(u) : null);
+    stopPulse();
   }
   let stopSpeaking = false, busy = false, playId = 0, greeted = false, listening = false, gotResult = false, misses = 0;
   function show(line) {
@@ -590,6 +653,12 @@
       if (live) live.dataset.speaker = line.speaker === 'coach' ? 'amara' : line.speaker;
     }
     if ($('ariaLine') && line.speaker === 'aria') $('ariaLine').textContent = line.text;
+    const talk = $('talkFace');
+    if (talk && !talk.hidden && $('talkLine')) {
+      const who = talk.dataset.coach;
+      const sp = line.speaker === 'coach' ? 'amara' : line.speaker;
+      if (sp === who || line.speaker === 'aria') $('talkLine').textContent = line.text;
+    }
     if (hostSession && line.speaker !== 'user' && line.speaker !== 'aria' && $('visitLine')) $('visitLine').textContent = line.text;
   }
   function present(line) {
@@ -664,7 +733,7 @@
     if (dest && DEST_COACH[dest.id]) return DEST_COACH[dest.id];
     return 'amara';
   }
-  function bindCoach(coachId, topic) {
+  function bindCoach(coachId, topic, opts) {
     if (!coachId || coachId === 'aria') {
       hostSession = null;
       if ($('visitCard')) $('visitCard').hidden = true;
@@ -682,7 +751,7 @@
       direct: true
     };
     const coach = cast.find(c => c.id === coachId);
-    if (coach) showVisit(coach);
+    if (coach && !(opts && opts.quiet)) showVisit(coach);
   }
   async function send(text) {
     const value = (text || '').trim();
@@ -732,6 +801,7 @@
   let speechGen = 0;
   function interrupt() {
     speechGen++;
+    stopPulse();
     stopSpeaking = true;
     playId++;
     busy = false;
@@ -800,7 +870,7 @@
       refresh3dStatus();
     }
   });
-  window.addEventListener('resize', () => { if (face) face.kick(); });
+  window.addEventListener('resize', () => { if (face) face.kick(); if (window.BrimWalk && BrimWalk.resize) BrimWalk.resize(); });
 
   $('typeBtn').onclick = () => { $('typeRow').hidden = !$('typeRow').hidden; if (!$('typeRow').hidden) $('txt').focus(); };
   $('typeRow').onsubmit = e => { e.preventDefault(); const v = $('txt').value; $('txt').value = ''; send(v); };
@@ -1448,6 +1518,7 @@
   }
   function selectDestination(d) {
     if (!d) return;
+    hideTalk();
     selectedDestId = d.id;
     document.querySelectorAll('.hotspot').forEach(btn => btn.classList.toggle('on', btn.dataset.dest === d.id));
     renderMission();
@@ -1580,6 +1651,10 @@
       const prev = pointers.get(e.pointerId);
       if (!prev) return;
       if (Math.hypot(e.clientX - prev.ox, e.clientY - prev.oy) > 8) stage.dataset.drag = '1';
+      if (stage.dataset.follow === '1') {
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, ox: prev.ox, oy: prev.oy });
+        return;
+      }
       if (pointers.size === 1) { tx += e.clientX - prev.x; ty += e.clientY - prev.y; }
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, ox: prev.ox, oy: prev.oy });
       if (pointers.size === 2) {
@@ -1600,24 +1675,43 @@
       goal.addEventListener('change', () => { eng.p.goal = goal.value.trim(); save(); });
     }
     if ($('progressHistory')) $('progressHistory').onclick = openHistory;
-    function focus(xPct, yPct) {
+    function pose() {
+      return { scale: scale, tx: tx, ty: ty, w: stage.clientWidth, h: stage.clientHeight };
+    }
+    function look(xPct, yPct, next, opts) {
+      opts = opts || {};
       const w = stage.clientWidth, h = stage.clientHeight;
       if (!w || !h) return;
-      scale = 2.2;
-      tx = w / 2 - (xPct / 100) * w * scale;
-      ty = h / 2 - (yPct / 100) * h * scale;
+      const goal = window.BrimWorld
+        ? BrimWorld.cameraTarget(xPct, yPct, next == null ? scale : next, w, h)
+        : { scale: Math.max(1, Math.min(3.2, next || scale)), tx: tx, ty: ty };
+      scale = goal.scale;
+      tx = goal.tx;
+      ty = goal.ty;
       clamp();
-      world.classList.add('glide');
-      requestAnimationFrame(apply);
-      setTimeout(() => world.classList.remove('glide'), 800);
+      const ms = opts.instant || opts.ms === 0 ? 0 : (opts.ms || 800);
+      world.style.transition = ms ? ('transform ' + ms + 'ms cubic-bezier(.22,.7,.2,1)') : 'none';
+      apply();
     }
-    function fit() {
+    function followCam(xPct, yPct, next) {
+      const w = stage.clientWidth, h = stage.clientHeight;
+      if (!w || !h || !window.BrimWorld) return;
+      const goal = BrimWorld.cameraTarget(xPct, yPct, next || scale, w, h);
+      scale += (goal.scale - scale) * 0.22;
+      tx += (goal.tx - tx) * 0.22;
+      ty += (goal.ty - ty) * 0.22;
+      clamp();
+      world.style.transition = 'none';
+      apply();
+    }
+    function focus(xPct, yPct) { look(xPct, yPct, 2.2, { ms: 700 }); }
+    function fit(opts) {
       scale = 1; tx = 0; ty = 0;
-      world.classList.add('glide');
-      requestAnimationFrame(apply);
-      setTimeout(() => world.classList.remove('glide'), 800);
+      const ms = opts && opts.instant ? 0 : 700;
+      world.style.transition = ms ? ('transform ' + ms + 'ms cubic-bezier(.22,.7,.2,1)') : 'none';
+      apply();
     }
-    window.BrimMap = { focus: focus, fit: fit };
+    window.BrimMap = { focus: focus, fit: fit, look: look, follow: followCam, pose: pose };
     apply();
   }
   const lib = BrimLibrary.createLibrary({
@@ -2289,6 +2383,81 @@
     if (hostSession && hostSession.coachId === 'marcus') return marcusTurn(value);
     return guestTurn(value);
   }
+  const INTRO = {
+    amara: [
+      { speaker: 'aria', text: 'This is Amara, at Mindset and Purpose.' },
+      { speaker: 'amara', text: "I'm glad you walked over." }
+    ],
+    marcus: [
+      { speaker: 'aria', text: 'This is Marcus, at the Cybersecurity Academy.' },
+      { speaker: 'marcus', text: 'You made it. We will start clean.' }
+    ],
+    jasmine: [
+      { speaker: 'aria', text: 'This is Jasmine, in Relationships and Dating.' },
+      { speaker: 'jasmine', text: "Hey. Come closer, I'm right here." }
+    ],
+    renee: [
+      { speaker: 'aria', text: 'This is Renee, for Lifestyle and Social Skills.' },
+      { speaker: 'renee', text: "I'm here. Let's see who else is in the room." }
+    ]
+  };
+  function hideTalk() {
+    const box = $('talkFace');
+    if (box) box.hidden = true;
+    stopPulse();
+  }
+  async function showTalk(coach, line) {
+    const box = $('talkFace');
+    if (!box || !coach) return;
+    box.hidden = false;
+    box.dataset.coach = coach.id;
+    box.dataset.mouth = coach.id === 'amara' ? 'warp' : 'pulse';
+    box.dataset.speaking = '0';
+    box.style.setProperty('--jaw', '0');
+    const img = $('talkImg');
+    if (img) {
+      img.src = coach.portrait;
+      img.alt = 'Portrait of ' + coach.name;
+      img.style.visibility = '';
+    }
+    if ($('talkName')) $('talkName').textContent = coach.name;
+    if ($('talkLine')) $('talkLine').textContent = line || coach.role || '';
+    if (coach.id !== 'amara') {
+      if ($('talkMount')) $('talkMount').replaceChildren();
+      return;
+    }
+    const api = await Promise.race([
+      ensureFace($('talkMount')),
+      new Promise(resolve => setTimeout(() => resolve(null), 1600))
+    ]);
+    if (api && img) img.style.visibility = 'hidden';
+  }
+  function meetAria() {
+    const aria = cast.find(c => c.id === 'aria');
+    if (!aria) return;
+    const text = ($('ariaLine') && $('ariaLine').textContent) || "I'm Aria. Pick a glowing stop.";
+    showTalk(aria, text);
+  }
+  window.BrimMeet = meetAria;
+  async function escort(coach, dest) {
+    hideTalk();
+    let trip = { walked: false, skipped: false };
+    if (window.BrimWalk && coach) {
+      try {
+        const ready = await BrimWalk.prepare(coach.id);
+        if (ready) {
+          const walked = await BrimWalk.play({ coachId: coach.id, dest: dest || null });
+          trip = { walked: !!walked, skipped: !!(BrimWalk.wasSkipped && BrimWalk.wasSkipped()) };
+        }
+      } catch (e) {
+        if (BrimWalk.cancel) BrimWalk.cancel();
+      }
+    }
+    if (!trip.walked && dest && window.BrimMap) window.BrimMap.focus(dest.x, dest.y);
+    if (!trip.skipped && INTRO[coach.id]) await play(INTRO[coach.id]);
+    await showTalk(coach);
+    return trip;
+  }
   async function activateCoach(id) {
     const coach = cast.find(c => c.id === id);
     if (!coach) return;
@@ -2312,11 +2481,14 @@
     const host = BrimLibrary.HOSTS.find(h => h.id === id);
     const dest = host ? destinations.find(d => d.id === host.dest) : null;
     eng.activeCoach = id;
-    hostLock = false;
+    hostLock = true;
     if (dest) selectDestination(dest);
     showHome();
-    if (dest && window.BrimMap) window.BrimMap.focus(dest.x, dest.y);
-    bindCoach(id, host ? host.place : coach.role);
+    bindCoach(id, host ? host.place : coach.role, { quiet: true });
+    await escort(coach, dest);
+    showVisit(coach);
+    hostLock = false;
+    if (!hostSession || hostSession.coachId !== id) return;
     if (id === 'marcus') await marcusGreet(hostSession);
     else await play([{ speaker: id, text: guestOpen(coach, hostSession) }]);
   }
@@ -2337,23 +2509,9 @@
       lastTopic: ''
     };
     hostLock = true;
-    let canWalk = false;
-    if (window.BrimWalk) {
-      try { canWalk = await window.BrimWalk.prepare(coach.id); } catch (e) { canWalk = false; }
-    }
-    let duringIntro = true;
-    if (canWalk) window.BrimWalk.cueCorner({ onSkip: () => { if (duringIntro) interrupt(); } });
-    await play([{ speaker: 'aria', text: intent.line }]);
-    duringIntro = false;
     showHome();
-    let walked = false;
-    if (canWalk && window.BrimWalk) {
-      try { walked = await window.BrimWalk.play({ coachId: coach.id, dest: dest || null }); }
-      catch (e) { walked = false; if (window.BrimWalk.cancel) window.BrimWalk.cancel(); }
-    }
-    if (!walked && dest && window.BrimMap) window.BrimMap.focus(dest.x, dest.y);
+    await escort(coach, dest);
     showVisit(coach);
-    await new Promise(resolve => setTimeout(resolve, 720));
     hostLock = false;
     if (!hostSession || hostSession.coachId !== coach.id) return;
     if (coach.id === 'marcus') await marcusGreet(hostSession);
@@ -2395,6 +2553,8 @@
     }).catch(() => {});
   }
   prepareOpener();
+  if (window.BrimWalk && (document.body.dataset.view || 'map') === 'map') BrimWalk.entrance();
+  if ($('talkMap')) $('talkMap').onclick = () => { hideTalk(); if (window.BrimMap) BrimMap.fit(); };
 })().catch(err => {
   const note = document.getElementById('note');
   if (note) note.textContent = 'The coach could not load. Reload the page.';

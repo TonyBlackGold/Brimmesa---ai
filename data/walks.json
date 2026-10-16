@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "aria": {
     "label": "Aria",
     "sheet": "assets/aria-walk-sheet.webp",
@@ -8,23 +8,41 @@
     "frameWidth": 112,
     "frameHeight": 198,
     "fps": 8,
-    "facing": "left"
+    "facing": "left",
+    "idleFrame": 0,
+    "home": [58, 55]
   },
   "coaches": {
+    "amara": {
+      "dest": "mindset",
+      "stand": [44, 22],
+      "waypoints": [[58, 52], [54, 46], [50, 40], [48, 32], [46, 26], [44, 22]],
+      "figure": {
+        "kind": "sheet",
+        "src": "assets/amara-full-sheet.webp",
+        "frame": 24,
+        "cols": 8,
+        "fw": 180,
+        "fh": 318
+      }
+    },
     "marcus": {
       "dest": "skills",
-      "from": "central",
-      "waypoints": [[58, 52], [52, 50], [46, 47], [41, 48], [37, 50]],
-      "approach": {
-        "mp4": "assets/marcus-approach.mp4",
-        "poster": "assets/marcus-approach-poster.webp",
-        "maxMs": 3400
-      },
-      "talk": {
-        "label": "Marcus",
-        "mp4": "assets/marcus-talk.mp4",
-        "poster": "assets/marcus-talk-poster.webp"
-      }
+      "stand": [37, 52],
+      "waypoints": [[58, 52], [52, 50], [46, 49], [41, 50], [37, 52]],
+      "figure": { "kind": "portrait", "src": "assets/marcus.webp" }
+    },
+    "jasmine": {
+      "dest": "relationships",
+      "stand": [30, 74],
+      "waypoints": [[58, 52], [50, 58], [42, 64], [34, 70], [30, 74]],
+      "figure": { "kind": "portrait", "src": "assets/jasmine.webp" }
+    },
+    "renee": {
+      "dest": "lifestyle",
+      "stand": [47, 80],
+      "waypoints": [[58, 52], [56, 60], [52, 68], [48, 74], [47, 80]],
+      "figure": { "kind": "portrait", "src": "assets/renee.webp" }
     }
   }
 }

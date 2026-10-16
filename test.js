@@ -632,5 +632,29 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
   });
   assert(/actually asked/i.test(quietPrompt));
 
+  const world = require('./walk.js');
+  const walks = require('./data/walks.json');
+  const destDoc = require('./data/destinations.json');
+  const byId = {};
+  destDoc.destinations.forEach(d => { byId[d.id] = d; });
+  assert(world.depthAt(16) < world.depthAt(52) && world.depthAt(52) < world.depthAt(76));
+  assert(world.spritePx(50, 2.2, 78) < world.spritePx(50, 1, 78));
+  assert(world.jawAmount('aa') > world.jawAmount('PP') && world.jawAmount('') === 0);
+  const cam = world.cameraTarget(50, 50, 2, 360, 270);
+  const centerX = (50 / 100) * 360 * cam.scale + cam.tx;
+  assert(Math.abs(centerX - 180) < 1);
+  ['amara', 'marcus', 'jasmine', 'renee'].forEach(id => {
+    const plan = walks.coaches[id];
+    const dest = byId[plan.dest];
+    assert(plan.waypoints.length >= 4, id);
+    const start = plan.waypoints[0];
+    const end = plan.waypoints[plan.waypoints.length - 1];
+    assert(Math.hypot(start[0] - 58, start[1] - 52) < 2, id + ' start');
+    assert(Math.hypot(end[0] - dest.x, end[1] - dest.y) < 12, id + ' end');
+    assert(plan.figure && plan.figure.src, id + ' figure');
+  });
+  assert(walks.coaches.amara.dest === 'mindset' && walks.coaches.jasmine.dest === 'relationships');
+  assert(walks.coaches.amara.figure.kind === 'sheet' && walks.coaches.jasmine.figure.kind === 'portrait');
+
   console.log('\nALL TESTS PASSED');
 })().catch(err => { console.error('FAIL', err); process.exit(1); });

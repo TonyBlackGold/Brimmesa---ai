@@ -27,6 +27,7 @@ function overlaps(a, b) {
       speak: finish,
       addEventListener() {}, removeEventListener() {}
     };
+    try { sessionStorage.setItem('brimmesa.entrance.v1', '1'); } catch (e) {}
     try { Object.defineProperty(window, 'speechSynthesis', { configurable: true, get: () => synth }); } catch (e) {}
     try { if (window.SpeechSynthesisUtterance) SpeechSynthesisUtterance.prototype.speak = finish; } catch (e) {}
     try {
@@ -211,6 +212,49 @@ function overlaps(a, b) {
   assert.equal(ctxCheck.clock, 'LIVE');
   assert.equal(ctxCheck.holidays, 'LIVE');
   if (ctxCheck.weather !== 'LIVE') assert(/don't have the weather|won't guess/i.test(ctxCheck.denied));
+
+  const page2 = await browser.newPage();
+  await page2.setViewport({ width: 360, height: 800, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
+  await page2.evaluateOnNewDocument(() => {
+    const finish = u => { try { if (u && u.onend) u.onend(); } catch (e) {} };
+    const synth = {
+      speaking: false, pending: false, paused: false,
+      getVoices: () => [], cancel() {}, pause() {}, resume() {}, speak: finish,
+      addEventListener() {}, removeEventListener() {}
+    };
+    try { Object.defineProperty(window, 'speechSynthesis', { configurable: true, get: () => synth }); } catch (e) {}
+  });
+  await page2.goto(URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page2.evaluate(async () => {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r => r.unregister()));
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+    localStorage.clear();
+    sessionStorage.removeItem('brimmesa.entrance.v1');
+  });
+  await page2.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page2.waitForSelector('body[data-ready="1"]', { timeout: 20000 });
+  await page2.waitForFunction(() => document.body.dataset.entrance === 'plaza' && document.getElementById('ariaWalker') && !document.getElementById('ariaWalker').hidden, { timeout: 8000 });
+  await page2.click('.walk-skip');
+  await page2.waitForFunction(() => document.body.dataset.entrance === 'skipped', { timeout: 4000 });
+  await page2.click('.hotspot[data-dest="health"]');
+  assert.equal(await page2.$eval('#missionTitle', n => n.textContent), 'Health & Fitness');
+  await page2.click('#tabCoaches');
+  await page2.waitForSelector('#coachGrid button');
+  await page2.evaluate(() => {
+    const b = [...document.querySelectorAll('#coachGrid button')].find(n => /Amara/.test(n.innerText));
+    b.scrollIntoView({ block: 'center' });
+    b.click();
+  });
+  await page2.waitForFunction(() => document.body.dataset.walk === 'arrived' || document.body.dataset.walk === 'trail', { timeout: 8000 });
+  await page2.waitForFunction(() => /Morning walks/i.test(document.getElementById('log').textContent), { timeout: 10000 });
+  const figures = await page2.evaluate(() => ({
+    amara: !!document.querySelector('.cast-figure[data-coach="amara"]'),
+    jasmine: !!document.querySelector('.cast-figure[data-coach="jasmine"]'),
+    depth: BrimWorld.depthAt(20) < BrimWorld.depthAt(70)
+  }));
+  assert(figures.amara && figures.jasmine && figures.depth);
 
   console.log('AUDIT UI PASSED');
   await browser.close();

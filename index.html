@@ -325,6 +325,39 @@ button.ghost {
 }
 .aria-walker canvas { width: 100%; height: 100%; display: block; filter: drop-shadow(0 2px 2px rgba(0,0,0,.45)); }
 .aria-walker.face-right canvas { transform: scaleX(-1); }
+.cast-figure {
+  position: absolute; z-index: 4; pointer-events: none;
+  aspect-ratio: 112 / 150; transform: translate(-50%, -92%);
+}
+.cast-figure.is-sheet { aspect-ratio: 180 / 318; }
+.cast-figure canvas, .cast-figure img { width: 100%; height: 100%; display: block; object-fit: cover; object-position: center 12%; }
+.cast-figure.is-portrait img {
+  -webkit-mask-image: radial-gradient(ellipse 48% 46% at 50% 40%, #000 58%, transparent 74%);
+  mask-image: radial-gradient(ellipse 48% 46% at 50% 40%, #000 58%, transparent 74%);
+}
+.talk-face {
+  position: fixed; z-index: 27; display: flex; gap: 10px; align-items: center;
+  left: 10px; right: calc(min(32vw, 136px) + 18px);
+  bottom: calc(168px + env(safe-area-inset-bottom));
+  padding: 8px; border-radius: 18px; border: 1px solid var(--line);
+  background: rgba(12, 13, 18, .94); animation: handoffIn .45s ease;
+}
+.talk-face[hidden] { display: none !important; }
+.talk-shot {
+  position: relative; flex: none; width: min(34vw, 132px); aspect-ratio: 3 / 4;
+  border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #100e0a;
+}
+.talk-shot img, #talkMount, #talkMount canvas {
+  position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block;
+  object-fit: cover; object-position: center 16%;
+}
+.talk-face[data-mouth="pulse"] .talk-shot img {
+  transform-origin: 50% 72%;
+  transform: scaleY(calc(1 - var(--jaw, 0) * 0.035));
+}
+.talk-face .who { margin: 0 0 4px; color: var(--gold-2); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.talk-face p { margin: 0; font-size: 14px; line-height: 1.35; }
+#talkMap { margin-top: 6px; min-height: 36px; }
 .walk-trail { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; overflow: visible; }
 .walk-trail .glow { fill: none; stroke: rgba(243, 212, 138, .45); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .walk-trail .core {
@@ -336,7 +369,7 @@ button.ghost {
   position: fixed; inset: 0; z-index: 26; background: transparent; border: 0; padding: 0; margin: 0;
 }
 .walk-skip {
-  position: fixed; left: 12px; bottom: calc(78px + env(safe-area-inset-bottom)); z-index: 36;
+  position: fixed; left: 12px; top: 74px; bottom: auto; z-index: 36;
   min-height: 36px; padding: 6px 14px; border-radius: 999px;
   border: 1px solid rgba(224, 182, 90, .75); background: rgba(12, 10, 8, .9); color: #f3d48a; font-size: 13px;
 }
@@ -604,6 +637,17 @@ body:not([data-ready="1"]) #missionGo { pointer-events: none; }
             <p class="kicker" id="visitName">Coach</p>
             <p id="visitLine"></p>
             <button class="ghost" id="backAria" type="button">Back to Aria</button>
+          </div>
+        </article>
+        <article id="talkFace" class="talk-face" hidden>
+          <div class="talk-shot">
+            <img id="talkImg" alt="">
+            <div id="talkMount"></div>
+          </div>
+          <div>
+            <p class="who" id="talkName">Aria</p>
+            <p id="talkLine"></p>
+            <button class="ghost" id="talkMap" type="button">Back to the map</button>
           </div>
         </article>
         <article class="aria-card" id="ariaCard">
