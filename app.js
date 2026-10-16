@@ -6,6 +6,9 @@
   const GEMINI_USAGE = 'brimmesa.gemini.usage';
   const GEMINI_TURNS = 'brimmesa.gemini.turns';
   const GEMINI_TTS = 'brimmesa.gemini.tts';
+  const ELEVEN_KEY = 'brimmesa.eleven.key';
+  const ELEVEN_VOICES = 'brimmesa.eleven.voices';
+  const ELEVEN_USAGE = 'brimmesa.eleven.usage';
   const GEMINI_DEFAULT = 'gemini-3.5-flash-lite';
   const $ = id => document.getElementById(id);
   const worlds = await (await fetch('data/worlds.json')).json();
@@ -85,6 +88,13 @@
     now() { return Date.now(); },
     readUsage() { return readJSON(GEMINI_TTS, { day: '', count: 0 }); },
     writeUsage(u) { localStorage.setItem(GEMINI_TTS, JSON.stringify({ day: u.day, count: u.count })); },
+    cacheGet,
+    cacheSet
+  });
+  const eleven = BrimSpeech.createEleven({
+    getKey() { return localStorage.getItem(ELEVEN_KEY) || ''; },
+    readUsage() { return readJSON(ELEVEN_USAGE, null); },
+    writeUsage(u) { localStorage.setItem(ELEVEN_USAGE, JSON.stringify({ tier: u.tier || '', character_count: u.character_count || 0, character_limit: u.character_limit || 0 })); },
     cacheGet,
     cacheSet
   });
@@ -189,24 +199,60 @@
   function setLoading(pct) {
     const n = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
     $('honest').textContent = 'Loading 3D Amara… ' + n + '%';
+    set3dStatus('loading ' + n + '%');
+  }
+  function errorText(err) {
+    if (!err) return 'unknown error';
+    if (typeof err === 'string') return err;
+    const raw = err.message || err.error || err.statusText || '';
+    if (raw) return String(raw);
+    try {
+      const json = JSON.stringify(err);
+      if (json && json !== '{}') return json;
+    } catch (e) {}
+    return String(err);
   }
   function failText(err) {
-    const raw = err && err.message ? String(err.message) : String(err || 'unknown error');
-    const clean = raw.replace(/\s+/g, ' ').trim().slice(0, 160) || 'unknown error';
+    const clean = errorText(err).replace(/\s+/g, ' ').trim().slice(0, 180) || 'unknown error';
     if (/webgl/i.test(clean)) return 'Still portrait: WebGL unavailable';
     return 'model failed to load: ' + clean;
+  }
+  function set3dStatus(text) {
+    const node = $('avatarStatus');
+    if (node) node.textContent = '3D status: ' + text;
+  }
+  function refresh3dStatus() {
+    if (!want3d()) { set3dStatus('off, still portrait'); return; }
+    if (!face) {
+      set3dStatus(faceFailed && $('honest') ? $('honest').textContent : 'loading');
+      return;
+    }
+    let d = { running: false, css: '0x0', buffer: '0x0', webgl: 'none', audio: 'none', lost: false, error: '' };
+    try { d = face.diagnostics() || d; } catch (e) { d.error = errorText(e); }
+    const bits = [
+      d.running ? 'loop on' : 'loop off',
+      'canvas ' + d.css,
+      'buffer ' + d.buffer,
+      d.webgl,
+      'audio ' + (d.audio || 'none')
+    ];
+    if (d.lost) bits.push('context lost');
+    if (d.error) bits.push(d.error);
+    set3dStatus(bits.join(' · '));
   }
   function showPortrait(reason) {
     $('heroFrame').classList.remove('is-3d');
     document.body.dataset.avatarMode = 'portrait';
     $('honest').textContent = reason || 'Still portrait · no lip sync';
+    set3dStatus(reason || 'still portrait');
   }
   function showStage() {
-    $('avatarMount').style.opacity = '';
     $('heroFrame').classList.add('is-3d');
     document.body.dataset.avatarMode = '3d';
-    $('honest').textContent = '3D coach · text-timed lip sync, not a recording';
+    $('honest').textContent = '3D coach · blinks and lip sync on this device';
     showRetry(false);
+    if (face) face.kick();
+    refresh3dStatus();
   }
   function ensureFace() {
     if (!want3d()) return Promise.resolve(null);
@@ -232,7 +278,7 @@
       if (document.body.dataset.view !== 'home') api.setVisible(false);
       return api;
     }).catch(err => {
-      console.error(err);
+      console.error(errorText(err));
       faceFailed = true;
       facePromise = null;
       showPortrait(failText(err));
@@ -284,7 +330,7 @@
     if (synth) {
       try { synth.cancel(); const u = new SpeechSynthesisUtterance(' '); u.volume = 0; synth.speak(u); synth.resume(); } catch (e) {}
     }
-    if (face) face.resume();
+    if (face) { face.resume(); face.kick(); }
     const ctx = audioContext();
     if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
   }
@@ -324,25 +370,39 @@
   function noteTts(kind) {
     if (toldTts === kind) return;
     toldTts = kind;
-    if (kind === 'limit') $('note').textContent = "That's today's spoken-voice allowance. I'll use this browser's voice until tomorrow.";
+    if (kind === 'eleven-limit') $('note').textContent = "This month's ElevenLabs characters are used up. I'll use the next voice.";
+    else if (kind === 'eleven-rate') $('note').textContent = "ElevenLabs is busy. I'll use the next voice.";
+    else if (kind === 'limit') $('note').textContent = "That's today's Gemini voice allowance. I'll use this browser's voice until tomorrow.";
     else if (kind === 'rate') $('note').textContent = "Google's free voice tier is busy. I'll use this browser's voice for now.";
+  }
+  function playbackContext(line) {
+    if (face && isAmara(line && line.speaker) && face.audioContext) {
+      const ctx = face.audioContext();
+      if (ctx) return ctx;
+    }
+    return audioContext();
   }
   function bytesToBuffer(ctx, bytes) {
     const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
     return ctx.decodeAudioData(copy);
   }
-  async function playBuffer(buffer, line, spoken) {
-    const ctx = audioContext();
+  async function playBuffer(buffer, line, spoken, plan) {
+    const ctx = playbackContext(line);
     if (ctx && ctx.state === 'suspended') { try { await ctx.resume(); } catch (e) {} }
-    const plan = BrimSpeech.fitWords(spoken, Math.round((buffer.duration || 0.3) * 1000));
+    const timed = plan && plan.visemes && plan.visemes.length
+      ? plan
+      : BrimSpeech.fitWords(spoken, Math.round((buffer.duration || 0.3) * 1000));
     const moving = face && isAmara(line.speaker);
     if (moving) {
       face.speak({
         audio: buffer,
         audible: true,
-        words: plan.words,
-        wtimes: plan.wtimes,
-        wdurations: plan.wdurations
+        words: timed.words,
+        wtimes: timed.wtimes,
+        wdurations: timed.wdurations,
+        visemes: timed.visemes,
+        vtimes: timed.vtimes,
+        vdurations: timed.vdurations
       }, { emotion: line.emotion || null });
       await waitMs(Math.ceil((buffer.duration || 0.3) * 1000) + 60);
       return;
@@ -359,7 +419,28 @@
       try { src.start(); } catch (e) { finish(); }
     });
   }
+  function elevenVoiceId(speakerId) {
+    const row = profileFor(speakerId);
+    const saved = readJSON(ELEVEN_VOICES, {});
+    if (row && saved[row.id]) return saved[row.id];
+    if (row && row.voice && row.voice.elevenVoice) return row.voice.elevenVoice;
+    const picked = BrimSpeech.pickVoice([], row && row.id);
+    return picked.voice_id;
+  }
   async function prepareSpeech(text, line, cfg) {
+    if (localStorage.getItem(ELEVEN_KEY)) {
+      const first = await eleven.synthesize(text, elevenVoiceId(line.speaker));
+      paintVoices();
+      if (first && first.bytes) {
+        const ctx = playbackContext(line);
+        if (ctx) {
+          try {
+            const buffer = await bytesToBuffer(ctx, first.bytes);
+            if (buffer) return { buffer, spoken: first.spoken, plan: first.plan };
+          } catch (e) {}
+        }
+      } else if (first && (first.blocked === 'limit' || first.blocked === 'rate')) noteTts('eleven-' + first.blocked);
+    }
     const voiceName = cfg.geminiVoice || 'Sulafat';
     const style = BrimSpeech.styleFor(cfg.style, line.emotion);
     const result = await speaker.synthesize(text, voiceName, style);
@@ -368,7 +449,7 @@
       if (result && (result.blocked === 'limit' || result.blocked === 'rate')) noteTts(result.blocked);
       return null;
     }
-    const ctx = audioContext();
+    const ctx = playbackContext(line);
     if (!ctx) return null;
     try {
       const buffer = await bytesToBuffer(ctx, result.bytes);
@@ -388,7 +469,7 @@
       upcoming = i + 1 < parts.length ? prepareSpeech(parts[i + 1], line, cfg) : null;
       if (speechGen !== gen || id !== playId) return;
       if (ready && ready.buffer) {
-        await playBuffer(ready.buffer, line, ready.spoken);
+        await playBuffer(ready.buffer, line, ready.spoken, ready.plan);
         continue;
       }
       await speakBrowser(parts[i], line, cfg, gen, id);
@@ -517,7 +598,19 @@
     interrupt();
     listen();
   };
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') { stopListening(); if (synth) synth.cancel(); } });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') {
+      stopListening();
+      if (synth) synth.cancel();
+      return;
+    }
+    if (face && want3d() && document.body.dataset.view === 'home') {
+      face.setVisible(true);
+      face.kick();
+      refresh3dStatus();
+    }
+  });
+  window.addEventListener('resize', () => { if (face) face.kick(); });
 
   $('typeBtn').onclick = () => { $('typeRow').hidden = !$('typeRow').hidden; if (!$('typeRow').hidden) $('txt').focus(); };
   $('typeRow').onsubmit = e => { e.preventDefault(); const v = $('txt').value; $('txt').value = ''; send(v); };
@@ -787,6 +880,59 @@
     }
     if ($('geminiStatus')) $('geminiStatus').textContent = localStorage.getItem(GEMINI_KEY) ? 'A key is saved on this device.' : 'No key saved.';
   }
+  function paintVoices() {
+    const usage = readJSON(ELEVEN_USAGE, null);
+    if ($('elevenStatus')) $('elevenStatus').textContent = localStorage.getItem(ELEVEN_KEY) ? 'An ElevenLabs key is saved on this device.' : 'No ElevenLabs key saved.';
+    if ($('elevenUsage')) {
+      $('elevenUsage').textContent = usage && usage.character_limit
+        ? usage.character_count.toLocaleString() + ' of ' + usage.character_limit.toLocaleString() + ' characters this month' + (usage.tier ? ' (' + usage.tier + ').' : '.')
+        : 'Monthly characters appear after a key is saved.';
+    }
+    refresh3dStatus();
+  }
+  function voiceChoices(list) {
+    const saved = readJSON(ELEVEN_VOICES, {});
+    return cast.map(row => {
+      const chosen = saved[row.id] || (row.voice && row.voice.elevenVoice);
+      const voices = (list || []).slice();
+      if (chosen && !voices.some(v => v.voice_id === chosen)) {
+        const preset = BrimSpeech.pickVoice([], row.id);
+        voices.unshift({ voice_id: chosen, name: (preset.voice_id === chosen ? preset.name : chosen), labels: {} });
+      }
+      return { row, voices: voices.length ? voices : [BrimSpeech.pickVoice([], row.id)], chosen };
+    });
+  }
+  function buildVoicePickers(list) {
+    const box = $('voicePickers');
+    if (!box) return;
+    box.replaceChildren();
+    voiceChoices(list).forEach(({ row, voices, chosen }) => {
+      const label = el('label', 'field', row.name.replace(/^Coach /, ''));
+      label.htmlFor = 'voice-' + row.id;
+      const sel = document.createElement('select');
+      sel.id = 'voice-' + row.id;
+      voices.forEach(v => {
+        const o = document.createElement('option');
+        o.value = v.voice_id;
+        const gender = v.labels && v.labels.gender ? ' · ' + v.labels.gender : '';
+        o.textContent = v.name + gender;
+        if (v.voice_id === chosen) o.selected = true;
+        sel.append(o);
+      });
+      sel.onchange = () => {
+        const next = readJSON(ELEVEN_VOICES, {});
+        next[row.id] = sel.value;
+        localStorage.setItem(ELEVEN_VOICES, JSON.stringify(next));
+      };
+      box.append(label, sel);
+    });
+  }
+  async function loadElevenVoices() {
+    if (!localStorage.getItem(ELEVEN_KEY)) { buildVoicePickers([]); return; }
+    const listed = await eleven.listVoices();
+    buildVoicePickers(listed && listed.voices);
+    if (listed && listed.blocked === 'error') $('elevenStatus').textContent = 'Could not load voices from ElevenLabs.';
+  }
 
   function badges() {
     const p = eng.p;
@@ -838,7 +984,7 @@
     $('dlg').close();
     showHome();
   };
-  $('settingsBtn').onclick = () => { paintGemini(); $('settingsDlg').showModal(); };
+  $('settingsBtn').onclick = () => { paintGemini(); paintVoices(); loadElevenVoices(); $('settingsDlg').showModal(); };
   $('settingsClose').onclick = () => $('settingsDlg').close();
   $('geminiSave').onclick = () => {
     const typed = ($('geminiKey').value || '').trim();
@@ -855,6 +1001,41 @@
     paintGemini();
     if (!localStorage.getItem(GEMINI_KEY)) $('geminiStatus').textContent = 'Add a key first.';
   };
+  $('elevenSave').onclick = () => {
+    const typed = ($('elevenKey').value || '').trim();
+    if (typed) {
+      localStorage.setItem(ELEVEN_KEY, typed);
+      $('elevenKey').value = '';
+    }
+    paintVoices();
+    if (!localStorage.getItem(ELEVEN_KEY)) $('elevenStatus').textContent = 'Add a key first.';
+    else loadElevenVoices();
+  };
+  $('elevenRemove').onclick = () => {
+    localStorage.removeItem(ELEVEN_KEY);
+    $('elevenKey').value = '';
+    paintVoices();
+    buildVoicePickers([]);
+  };
+  $('elevenTest').onclick = async () => {
+    const typed = ($('elevenKey').value || '').trim();
+    if (typed) localStorage.setItem(ELEVEN_KEY, typed);
+    $('elevenKey').value = '';
+    if (!localStorage.getItem(ELEVEN_KEY)) { $('elevenStatus').textContent = 'Add a key first.'; return; }
+    $('elevenStatus').textContent = 'Testing…';
+    const sub = await eleven.subscription();
+    if (sub && !sub.blocked) {
+      localStorage.setItem(ELEVEN_USAGE, JSON.stringify({ tier: sub.tier, character_count: sub.character_count, character_limit: sub.character_limit }));
+      $('elevenStatus').textContent = 'Connected. ' + (sub.tier || 'plan') + ' plan.';
+      paintVoices();
+      loadElevenVoices();
+      return;
+    }
+    if (sub && sub.blocked === 'badkey') $('elevenStatus').textContent = 'ElevenLabs rejected that key.';
+    else if (sub && sub.blocked === 'rate') $('elevenStatus').textContent = 'ElevenLabs is busy. Try again in a moment.';
+    else if (sub && sub.blocked === 'offline') $('elevenStatus').textContent = 'Offline. The key stayed on this device.';
+    else $('elevenStatus').textContent = 'Could not reach ElevenLabs.';
+  };
   $('geminiRemove').onclick = () => {
     localStorage.removeItem(GEMINI_KEY);
     $('geminiKey').value = '';
@@ -870,6 +1051,8 @@
     if ($('geminiUsage')) $('geminiUsage').textContent = llm.usageNow().count + ' of ' + (llm.dailyLimit || 50) + ' AI turns today.';
   };
   paintGemini();
+  paintVoices();
+  buildVoicePickers([]);
   $('drive').onchange = e => send(e.target.checked ? 'driving mode on' : 'driving mode off');
   $('avatar3d').onchange = e => {
     localStorage.setItem('brimmesa.avatar', e.target.checked ? '3d' : 'portrait');

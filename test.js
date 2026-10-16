@@ -343,5 +343,103 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
   assert.equal(cast.find(c => c.id === 'renee').voice.geminiVoice, 'Despina');
   assert.equal(cast.find(c => c.id === 'marcus').voice.geminiVoice, 'Orus');
 
+  console.log('9) ElevenLabs voices and character timing');
+  const plan = speech.alignmentPlan({
+    characters: ['H', 'i', ' ', 'B', 'r', 'i', 'm', 'm', 'e', 's', 'a'],
+    character_start_times_seconds: [0, 0.08, 0.16, 0.24, 0.32, 0.4, 0.48, 0.56, 0.64, 0.72, 0.8],
+    character_end_times_seconds: [0.08, 0.16, 0.24, 0.32, 0.4, 0.48, 0.56, 0.64, 0.72, 0.8, 0.9]
+  });
+  assert(plan.visemes.length > 3);
+  assert.equal(plan.vtimes[0], 0);
+  assert(plan.words.join(' ').includes('Brimmesa') || plan.words.includes('Brimmesa'));
+  assert.equal(speech.pickVoice([], 'amara').name, 'Matilda');
+  assert.equal(speech.pickVoice([
+    { voice_id: speech.EL_VOICES.amara.voice_id, name: 'Matilda', labels: { gender: 'female' } },
+    { voice_id: 'custom', name: 'Ada', labels: { gender: 'female' } }
+  ], 'amara').name, 'Matilda');
+  assert.equal(speech.pickVoice([{ voice_id: 'custom', name: 'Ada', labels: { gender: 'female' } }], 'amara').voice_id, 'custom');
+  assert.equal(speech.pickVoice([{ voice_id: 'man', name: 'Firm', labels: { gender: 'male' } }], 'marcus').voice_id, 'man');
+  const mp3 = Buffer.from('not-real-mp3');
+  const elCache = new Map();
+  let elCalls = 0;
+  let elUsage = { character_count: 0, character_limit: 10000, tier: 'free' };
+  const el = speech.createEleven({
+    getKey: () => 'xi-test',
+    readUsage: () => elUsage,
+    writeUsage(u) { elUsage = u; },
+    cacheGet: async k => elCache.get(k) || null,
+    cacheSet: async (k, value) => { elCache.set(k, value); },
+    fetchImpl: async (url, req) => {
+      elCalls++;
+      assert.equal(req.headers['xi-api-key'], 'xi-test');
+      assert(!url.includes('xi-test'));
+      assert(url.includes('/v1/text-to-speech/'));
+      assert(url.includes('/with-timestamps'));
+      assert(url.includes('output_format=mp3_22050_32'));
+      const body = JSON.parse(req.body);
+      assert.equal(body.model_id, 'eleven_flash_v2_5');
+      assert.equal(body.text, 'Welcome to Brimmesa AI.');
+      assert(url.includes(encodeURIComponent(speech.EL_VOICES.amara.voice_id)));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          audio_base64: mp3.toString('base64'),
+          alignment: {
+            characters: ['H', 'i'],
+            character_start_times_seconds: [0, 0.1],
+            character_end_times_seconds: [0.1, 0.2]
+          }
+        })
+      };
+    }
+  });
+  const clip = await el.synthesize('Welcome to BRIMMESA AI.', speech.EL_VOICES.amara.voice_id);
+  assert.equal(clip.provider, 'eleven');
+  assert.equal(clip.spoken, 'Welcome to Brimmesa AI.');
+  assert(clip.plan.visemes.length >= 1);
+  assert.equal(elCalls, 1);
+  assert.equal(elUsage.character_count, 'Welcome to Brimmesa AI.'.length);
+  const cachedClip = await el.synthesize('Welcome to BRIMMESA AI.', speech.EL_VOICES.amara.voice_id);
+  assert.equal(cachedClip.cached, true);
+  assert.equal(elCalls, 1);
+  const busy = speech.createEleven({
+    getKey: () => 'xi-test',
+    fetchImpl: async () => ({ ok: false, status: 429, json: async () => ({}) })
+  });
+  assert.equal((await busy.synthesize('Hello there.', 'voice')).blocked, 'rate');
+  const bare = speech.createEleven({ getKey: () => '', fetchImpl: async () => { throw new Error('no key must not fetch'); } });
+  assert.equal((await bare.synthesize('Hello.', 'voice')).blocked, 'nokey');
+  const full = speech.createEleven({
+    getKey: () => 'xi-test',
+    readUsage: () => ({ character_count: 10000, character_limit: 10000 }),
+    fetchImpl: async () => { throw new Error('over limit must not fetch'); }
+  });
+  assert.equal((await full.synthesize('Hello.', 'voice')).blocked, 'limit');
+  const listed = speech.createEleven({
+    getKey: () => 'xi-test',
+    fetchImpl: async (url, req) => {
+      assert(url.includes('/v1/voices'));
+      assert.equal(req.headers['xi-api-key'], 'xi-test');
+      return { ok: true, status: 200, json: async () => ({ voices: [{ voice_id: 'v1', name: 'Sarah', category: 'premade', labels: { gender: 'female' } }] }) };
+    }
+  });
+  const voices = await listed.listVoices();
+  assert.equal(voices.voices[0].name, 'Sarah');
+  const sub = speech.createEleven({
+    getKey: () => 'xi-test',
+    fetchImpl: async (url, req) => {
+      assert(url.includes('/v1/user/subscription'));
+      assert(!url.includes('xi-test'));
+      return { ok: true, status: 200, json: async () => ({ tier: 'free', character_count: 120, character_limit: 10000, status: 'free' }) };
+    }
+  });
+  const account = await sub.subscription();
+  assert.equal(account.character_limit, 10000);
+  assert.equal(account.character_count, 120);
+  assert.equal(cast.find(c => c.id === 'jasmine').voice.elevenName, 'Jessica');
+  assert.equal(cast.find(c => c.id === 'renee').voice.elevenName, 'Sarah');
+  assert.equal(cast.find(c => c.id === 'marcus').voice.elevenName, 'Daniel');
+
   console.log('\nALL TESTS PASSED');
 })().catch(err => { console.error('FAIL', err); process.exit(1); });

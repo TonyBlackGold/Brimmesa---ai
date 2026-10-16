@@ -108,7 +108,14 @@ export class Character {
   }
 
   speakNow(input, opt) {
-    if (!this.head || !this.head.armature) return;
+    if (!this.head || !this.head.armature) {
+      this.lastError = '3D rig is not loaded';
+      return;
+    }
+    if (this.head.audioCtx && this.head.audioCtx.state !== 'running') {
+      const pending = this.head.audioCtx.resume();
+      if (pending && pending.catch) pending.catch(() => {});
+    }
     if (input && typeof input === 'object' && (input.audio || input.visemes)) {
       this.session++;
       this.realigns = 0;
@@ -254,10 +261,60 @@ export class Character {
     else this.head.stop();
   }
 
+  audioContext() {
+    return this.head && this.head.audioCtx;
+  }
+
   resume() {
-    if (this.head && this.head.audioCtx && this.head.audioCtx.state === 'suspended') {
-      this.head.audioCtx.resume().catch(() => {});
+    if (this.head && this.head.audioCtx && this.head.audioCtx.state !== 'running') {
+      this.head.audioCtx.resume().catch(err => {
+        this.lastError = 'audio ' + (err && err.message ? err.message : 'suspended');
+      });
     }
+  }
+
+  kick() {
+    if (!this.head) return;
+    this.resume();
+    try {
+      if (this.head.armature && this.head.isRunning === false) this.head.start();
+      const node = this.head.nodeAvatar;
+      const renderer = this.head.renderer;
+      if (node && renderer) {
+        const w = Math.max(2, node.clientWidth || 0);
+        const h = Math.max(2, node.clientHeight || 0);
+        renderer.setSize(w, h, false);
+        if (this.head.camera) {
+          this.head.camera.aspect = w / h;
+          this.head.camera.updateProjectionMatrix();
+        }
+        if (typeof this.head.render === 'function') this.head.render();
+      }
+    } catch (e) {
+      this.lastError = e && e.message ? e.message : String(e);
+    }
+  }
+
+  diagnostics() {
+    const canvas = this.head && this.head.renderer && this.head.renderer.domElement;
+    let webgl = 'none';
+    let lost = false;
+    try {
+      const gl = this.head && this.head.renderer && this.head.renderer.getContext();
+      if (gl) {
+        webgl = gl.constructor && gl.constructor.name === 'WebGL2RenderingContext' ? 'webgl2' : 'webgl';
+        lost = !!(gl.isContextLost && gl.isContextLost());
+      }
+    } catch (e) {}
+    return {
+      running: !!(this.head && this.head.isRunning),
+      audio: this.head && this.head.audioCtx ? this.head.audioCtx.state : 'none',
+      css: canvas ? Math.round(canvas.clientWidth) + 'x' + Math.round(canvas.clientHeight) : '0x0',
+      buffer: canvas ? canvas.width + 'x' + canvas.height : '0x0',
+      webgl,
+      lost,
+      error: this.lastError || ''
+    };
   }
 
   armGestures() {

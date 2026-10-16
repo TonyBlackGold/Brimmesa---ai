@@ -182,9 +182,201 @@
     };
   }
 
+  const EL_MODEL = 'eleven_flash_v2_5';
+  const EL_VOICES = {
+    amara: { voice_id: 'XrExE9yKIg1WjnnlVkGX', name: 'Matilda' },
+    jasmine: { voice_id: 'cgSgspJ2msm6clMCkdW9', name: 'Jessica' },
+    renee: { voice_id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah' },
+    marcus: { voice_id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel' }
+  };
+  const VISEME = {
+    a: 'aa', e: 'E', i: 'I', o: 'O', u: 'U',
+    p: 'PP', b: 'PP', m: 'PP', f: 'FF', v: 'FF',
+    d: 'DD', t: 'DD', k: 'kk', c: 'kk', g: 'kk', q: 'kk',
+    s: 'SS', z: 'SS', n: 'nn', l: 'nn', r: 'RR', w: 'U', y: 'I',
+    j: 'CH', h: 'aa'
+  };
+
+  function charViseme(ch, next) {
+    const c = String(ch || '').toLowerCase();
+    const n = String(next || '').toLowerCase();
+    if (c === 't' && n === 'h') return 'TH';
+    if ((c === 'c' || c === 's') && n === 'h') return 'CH';
+    if (!/[a-z]/.test(c)) return '';
+    return VISEME[c] || '';
+  }
+
+  function alignmentPlan(alignment) {
+    const chars = (alignment && alignment.characters) || [];
+    const starts = (alignment && alignment.character_start_times_seconds) || [];
+    const ends = (alignment && alignment.character_end_times_seconds) || [];
+    const visemes = [];
+    const vtimes = [];
+    const vdurations = [];
+    const words = [];
+    const wtimes = [];
+    const wdurations = [];
+    let word = '';
+    let wordStart = 0;
+    let wordEnd = 0;
+    function flushWord() {
+      if (!word) return;
+      words.push(word);
+      wtimes.push(wordStart);
+      wdurations.push(Math.max(40, wordEnd - wordStart));
+      word = '';
+    }
+    for (let i = 0; i < chars.length; i++) {
+      const ch = String(chars[i] || '');
+      const start = Math.round((Number(starts[i]) || 0) * 1000);
+      const end = Math.max(start + 30, Math.round((Number(ends[i]) || 0) * 1000));
+      if (!/[A-Za-z0-9']/.test(ch)) { flushWord(); continue; }
+      if (!word) wordStart = start;
+      word += ch;
+      wordEnd = end;
+      const digraph = (ch === 't' || ch === 'T' || ch === 'c' || ch === 'C' || ch === 's' || ch === 'S') && /h/i.test(chars[i + 1] || '');
+      const name = charViseme(ch, chars[i + 1]);
+      if (name) {
+        const stop = digraph ? Math.max(end, Math.round((Number(ends[i + 1]) || 0) * 1000)) : end;
+        const last = visemes.length - 1;
+        if (last >= 0 && visemes[last] === name && vtimes[last] + vdurations[last] >= start - 20) {
+          vdurations[last] = Math.max(vdurations[last], stop - vtimes[last]);
+        } else {
+          visemes.push(name);
+          vtimes.push(start);
+          vdurations.push(Math.max(30, stop - start));
+        }
+      }
+      if (digraph) {
+        word += chars[i + 1];
+        wordEnd = Math.max(wordEnd, Math.round((Number(ends[i + 1]) || 0) * 1000));
+        i++;
+      }
+    }
+    flushWord();
+    if (!visemes.length) {
+      visemes.push('aa');
+      vtimes.push(0);
+      vdurations.push(120);
+    }
+    return { words, wtimes, wdurations, visemes, vtimes, vdurations };
+  }
+
+  function pickVoice(voices, characterId) {
+    const want = EL_VOICES[characterId] || EL_VOICES.amara;
+    const list = voices || [];
+    const idOf = v => v && (v.voice_id || v.id);
+    const found = list.find(v => idOf(v) === want.voice_id)
+      || list.find(v => String(v.name || '').toLowerCase() === want.name.toLowerCase());
+    if (found) return { voice_id: idOf(found), name: found.name || want.name, labels: found.labels || {}, category: found.category || '' };
+    const female = characterId !== 'marcus';
+    const gendered = list.find(v => String((v.labels && v.labels.gender) || '').toLowerCase() === (female ? 'female' : 'male'));
+    const row = gendered || list[0];
+    if (row) return { voice_id: idOf(row), name: row.name || want.name, labels: row.labels || {}, category: row.category || '' };
+    return { voice_id: want.voice_id, name: want.name, labels: {}, category: 'premade' };
+  }
+
+  function createEleven(opts) {
+    opts = opts || {};
+    const base = 'https://api.elevenlabs.io';
+    function key() { return opts.getKey ? String(opts.getKey() || '') : ''; }
+    async function call(path, options) {
+      const k = key();
+      if (!k) return { blocked: 'nokey' };
+      const fetchFn = opts.fetchImpl || (typeof fetch === 'function' ? fetch : null);
+      if (!fetchFn) return { blocked: 'error' };
+      const headers = Object.assign({ 'xi-api-key': k }, (options && options.headers) || {});
+      let res;
+      try {
+        res = await fetchFn(base + path, Object.assign({}, options || {}, { headers }));
+      } catch (e) {
+        return { blocked: 'offline' };
+      }
+      return { res };
+    }
+    return {
+      model: EL_MODEL,
+      defaults: EL_VOICES,
+      async listVoices() {
+        const got = await call('/v1/voices?show_legacy=true', { method: 'GET' });
+        if (got.blocked) return Object.assign({ voices: [] }, got);
+        if (!got.res || !got.res.ok) return { blocked: got.res && got.res.status === 429 ? 'rate' : 'error', status: got.res && got.res.status, voices: [] };
+        let json = {};
+        try { json = await got.res.json(); } catch (e) { json = {}; }
+        const voices = (json.voices || []).map(v => ({
+          voice_id: v.voice_id,
+          name: v.name || 'Voice',
+          category: v.category || '',
+          labels: v.labels || {}
+        })).filter(v => v.voice_id);
+        return { voices };
+      },
+      async subscription() {
+        const got = await call('/v1/user/subscription', { method: 'GET' });
+        if (got.blocked) return got;
+        if (!got.res || !got.res.ok) {
+          return { blocked: got.res && got.res.status === 401 ? 'badkey' : got.res && got.res.status === 429 ? 'rate' : 'error', status: got.res && got.res.status };
+        }
+        let json = {};
+        try { json = await got.res.json(); } catch (e) { return { blocked: 'error' }; }
+        return {
+          tier: json.tier || '',
+          character_count: Number(json.character_count) || 0,
+          character_limit: Number(json.character_limit) || 0,
+          status: json.status || ''
+        };
+      },
+      async synthesize(text, voiceId) {
+        const spoken = spokenText(text, 'gemini');
+        if (!spoken) return { blocked: 'empty' };
+        const voice = voiceId || EL_VOICES.amara.voice_id;
+        const cacheKey = ['eleven', EL_MODEL, voice, spoken].join('\n');
+        try {
+          const hit = opts.cacheGet && await opts.cacheGet(cacheKey);
+          if (hit && hit.bytes && hit.bytes.length) {
+            return { bytes: hit.bytes, mime: hit.mime || 'audio/mpeg', plan: hit.plan, cached: true, spoken, provider: 'eleven' };
+          }
+        } catch (e) {}
+        if (!key()) return { blocked: 'nokey', spoken };
+        let sub = null;
+        try { sub = opts.readUsage && opts.readUsage(); } catch (e) { sub = null; }
+        if (sub && sub.character_limit && sub.character_count >= sub.character_limit) return { blocked: 'limit', spoken };
+        const got = await call('/v1/text-to-speech/' + encodeURIComponent(voice) + '/with-timestamps?output_format=mp3_22050_32', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({
+            text: spoken,
+            model_id: EL_MODEL,
+            voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0, use_speaker_boost: false }
+          })
+        });
+        if (got.blocked) return Object.assign({ spoken }, got);
+        const res = got.res;
+        if (!res || !res.ok) return { blocked: res && res.status === 429 ? 'rate' : 'error', status: res && res.status, spoken };
+        let json = null;
+        try { json = await res.json(); } catch (e) { json = null; }
+        if (!json || !json.audio_base64) return { blocked: 'error', spoken };
+        const bytes = b64ToBytes(json.audio_base64);
+        const plan = alignmentPlan(json.alignment || json.normalized_alignment);
+        try { opts.cacheSet && await opts.cacheSet(cacheKey, { bytes, mime: 'audio/mpeg', plan }); } catch (e) {}
+        try {
+          if (opts.writeUsage) {
+            opts.writeUsage({
+              tier: sub && sub.tier || '',
+              character_count: ((sub && Number(sub.character_count)) || 0) + spoken.length,
+              character_limit: (sub && Number(sub.character_limit)) || 0
+            });
+          }
+        } catch (e) {}
+        return { bytes, mime: 'audio/mpeg', plan, cached: false, spoken, provider: 'eleven' };
+      }
+    };
+  }
+
   const api = {
     TTS_MODEL, TTS_DAILY, SAMPLE_RATE, pronounce, browserSpells, spokenText, sentences,
-    styleFor, ttsBody, extractAudio, b64ToBytes, parseWav, encodeWav, fitWords, dayStamp, createSpeaker
+    styleFor, ttsBody, extractAudio, b64ToBytes, parseWav, encodeWav, fitWords, dayStamp, createSpeaker,
+    EL_MODEL, EL_VOICES, alignmentPlan, pickVoice, createEleven
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.BrimSpeech = api;

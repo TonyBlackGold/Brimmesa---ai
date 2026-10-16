@@ -123,11 +123,10 @@ header.top {
   border: 1px solid var(--line);
   box-shadow: 0 20px 60px rgba(0, 0, 0, .35);
 }
-.hero-frame img { width: 100%; height: 100%; object-fit: cover; object-position: center 18%; }
-#avatarMount { position: absolute; inset: 0; z-index: 0; opacity: 0; }
+.hero-frame img { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; object-fit: cover; object-position: center 18%; }
+#avatarMount { position: absolute; inset: 0; z-index: 1; }
 #avatarMount canvas { width: 100% !important; height: 100% !important; display: block; }
-.hero-frame.is-3d #avatarMount { opacity: 1; }
-.hero-frame.is-3d img { opacity: 0; }
+.hero-frame.is-3d img { visibility: hidden; }
 #avatarMount, #avatarMount canvas { pointer-events: none; }
 .hero-frame:after {
   content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
@@ -151,8 +150,8 @@ button.retry3d[hidden] { display: none !important; }
 .bubble {
   position: absolute; z-index: 2; left: 16px; right: 16px; bottom: 64px;
   max-width: 460px; padding: 12px 14px; border-radius: 16px;
-  background: rgba(12, 11, 10, .78); border: 1px solid rgba(224, 182, 90, .45);
-  box-shadow: 0 10px 30px rgba(0,0,0,.35); backdrop-filter: blur(8px);
+  background: rgba(12, 11, 10, .9); border: 1px solid rgba(224, 182, 90, .45);
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
 }
 .bubble .who { margin: 0 0 4px; color: var(--gold-2); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
 .bubble p { margin: 0; font-size: 16px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
@@ -330,6 +329,7 @@ button.ghost {
 dialog { border: 1px solid var(--line); border-radius: 18px; background: #12141a; color: var(--ink); width: min(560px, 94vw); max-height: min(90vh, 820px); overflow: auto; }
 #settingsDlg h4 { font-family: var(--serif); font-size: 18px; margin: 14px 0 6px; }
 #settingsDlg label.field { display: block; margin: 8px 0 2px; font-size: 13px; color: var(--muted); }
+#settingsDlg select,
 #settingsDlg input[type="text"], #settingsDlg input[type="password"] {
   width: 100%; box-sizing: border-box; margin: 0 0 8px; min-height: 44px;
   background: #0e1014; color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 16px;
@@ -514,9 +514,20 @@ input[type=checkbox] { width: 22px; height: 22px; }
   <label class="row"><input type="checkbox" id="avatar3d" checked> Animated 3D coach</label>
   <p class="fine">Stylized 3D. With a saved key the mouth follows the spoken audio. Without one, lip sync is timed from the text. Off keeps the still portrait. Nothing is uploaded.</p>
   <h4>Voices</h4>
-  <p class="fine" id="ttsUsage">0 of 40 spoken lines today.</p>
+  <p class="fine" id="avatarStatus">3D status: starting</p>
+  <label class="field" for="elevenKey">ElevenLabs API key</label>
+  <input id="elevenKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a key from ElevenLabs">
+  <p class="fine" id="elevenStatus">No ElevenLabs key saved.</p>
+  <p class="fine" id="elevenUsage">Monthly characters appear after a key is saved.</p>
+  <div class="dlg-actions">
+    <button class="gold" id="elevenSave" type="button">Save</button>
+    <button class="ghost" id="elevenTest" type="button">Test</button>
+    <button class="ghost" id="elevenRemove" type="button">Remove key</button>
+  </div>
+  <div id="voicePickers"></div>
+  <p class="fine" id="ttsUsage">0 of 40 Gemini spoken lines today.</p>
   <div class="voice-row" id="voicePreviews"></div>
-  <p class="fine">BRIMMESA stays on screen. Speech says the name as the word Brimmesa. A saved key uses Gemini voices. Repeated lines are cached on this device. The microphone is not recorded.</p>
+  <p class="fine">BRIMMESA stays on screen. Speech says the name as the word Brimmesa. ElevenLabs speaks first, then Gemini, then this browser. Repeated lines are cached on this device. The microphone is not recorded. The ElevenLabs key and the spoken text stay between this device and ElevenLabs.</p>
   <h4>AI brain</h4>
   <label class="field" for="geminiModel">Model</label>
   <input id="geminiModel" type="text" autocomplete="off" spellcheck="false" value="gemini-3.5-flash-lite">
@@ -562,7 +573,7 @@ try {
 if ('serviceWorker' in navigator) {
   var hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange', function () { if (hadController) location.reload(); });
-  navigator.serviceWorker.register('sw.js').catch(function () {});
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(function () {});
 }
 </script>
 </body>

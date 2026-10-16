@@ -18,7 +18,7 @@ A provider is `{ name, enabled, respond(ctx, engine) }`. `respond` returns `[{ s
 
 Progress stays on the device under `brimmesa.profile.v1`: name, XP, level, streak, mastery, and short summaries. Microphone audio is not stored. Repeated spoken lines may be cached in IndexedDB on this device. Roadmap percentages are mastery scores, or zero when nothing has been scored.
 
-`setAvatarState('idle' | 'listening' | 'speaking' | 'thinking', { speaker, viseme })` drives the portraits and, when 3D is on, Coach Amara. See `AVATARS.md`. The 3D module is `avatar/` and loads only after first paint. With a saved Gemini key, speech is audio from Gemini TTS and the mouth follows that audio. Otherwise lip sync is timed from the spoken text, because `speechSynthesis` does not expose audio. The still portrait remains when 3D is off or WebGL fails.
+`setAvatarState('idle' | 'listening' | 'speaking' | 'thinking', { speaker, viseme })` drives the portraits and, when 3D is on, Coach Amara. See `AVATARS.md`. The 3D module is `avatar/` and loads only after first paint. Speech tries ElevenLabs first when `brimmesa.eleven.key` is saved, then Gemini TTS, then the browser voice. ElevenLabs character timings drive the mouth. The still portrait remains when 3D is off or the model fails to load. Settings shows a `3D status` line with the last error.
 
 ## Next phase
 
