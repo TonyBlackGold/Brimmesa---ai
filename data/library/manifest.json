@@ -2,6 +2,9 @@
   "version": 1,
   "files": [
     "data/library/marcus/cia-note.json",
-    "data/library/amara/magick-moment.json"
+    "data/library/amara/magick-moment.json",
+    "data/library/amara/killer-instinct.json",
+    "data/library/amara/self-control.json",
+    "data/library/amara/full-schedule.json"
   ]
 }

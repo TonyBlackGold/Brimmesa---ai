@@ -1,0 +1,74 @@
+{
+  "items": [
+    {
+      "id": "atlas-amara-killer-instinct",
+      "coaches": ["amara"],
+      "title": "Bosshogg Macaroni is live!",
+      "sourceType": "notes",
+      "url": "https://www.youtube.com/watch?v=VtPhsICK_QI",
+      "channel": "Bosshogg Macaroni",
+      "timestamps": [41, 73, 88, 192, 223, 292, 480, 1440, 2400, 2880, 3120],
+      "chunks": [
+        {
+          "id": "c0",
+          "start": 41,
+          "text": "A professional is the person who gets up and does the work every day. There is no daily debate about whether today counts. Link: https://www.youtube.com/watch?v=VtPhsICK_QI&t=41"
+        },
+        {
+          "id": "c1",
+          "start": 73,
+          "text": "Waiting for a perfect moment is a different life from planning to be at the work again tomorrow. One reacts. The other keeps a streak. Link: https://www.youtube.com/watch?v=VtPhsICK_QI&t=73"
+        },
+        {
+          "id": "c2",
+          "start": 88,
+          "text": "If the work is yours, you try it on ordinary days, including the days you would rather stay in. The feeling of being meant for it shows up as repetition. Link: https://www.youtube.com/watch?v=VtPhsICK_QI&t=88"
+        },
+        {
+          "id": "c3",
+          "start": 192,
+          "text": "Handle the business when you wake up. The standard is the morning itself, not a speech about the morning. Link: https://www.youtube.com/watch?v=VtPhsICK_QI&t=192"
+        },
+        {
+          "id": "c4",
+          "start": 223,
+          "text": "Lasting at something means you outwork the field. You do not hand the pace to whoever else showed up. Link: https://www.youtube.com/watch?v=VtPhsICK_QI&t=223"
+        },
+        {
+          "id": "c5",
+          "start": 292,
+          "text": "If you do not yet know what the work consists of, you are in the learning steps. That is the start, not a failure. Link: https://www.youtube.com/watch?v=VtPhsICK_QI&t=292"
+        },
+        {
+          "id": "c6",
+          "start": 480,
+          "text": "Visible results often come from value you already stored. The next good day is usually work that was banked earlier. Link: https://www.youtube.com/watch?v=VtPhsICK_QI&t=480"
+        },
+        {
+          "id": "c7",
+          "start": 1440,
+          "text": "Focus has to match. If someone is aimed at a different job, standing next to them does not put you on the same work. Link: https://www.youtube.com/watch?v=VtPhsICK_QI&t=1440"
+        },
+        {
+          "id": "c8",
+          "start": 2400,
+          "text": "Two hard days do not change a life. If you want something serious to give, expect a longer road than a weekend or even a couple of years. Link: https://www.youtube.com/watch?v=VtPhsICK_QI&t=2400"
+        },
+        {
+          "id": "c9",
+          "start": 2880,
+          "text": "Set a standard and keep moving when someone will not meet it. Arguing all day is not the work. Link: https://www.youtube.com/watch?v=VtPhsICK_QI&t=2880"
+        },
+        {
+          "id": "c10",
+          "start": 3120,
+          "text": "Keep working the thing. Most of the result is staying on it after the exciting part fades. Link: https://www.youtube.com/watch?v=VtPhsICK_QI&t=3120"
+        }
+      ],
+      "tags": ["mindset", "discipline", "work", "standard"],
+      "attribution": "Original Brimmesa lesson notes for Coach Amara from Bosshogg Macaroni, YouTube live VtPhsICK_QI, channel https://www.youtube.com/@bosshoggmacaroni6462, about 61 minutes. Not a transcript and not the speaker's words. Profanity and street-business anecdotes were left out.",
+      "citeInConversation": false,
+      "hashKey": "atlas:amara:killer-instinct"
+    }
+  ]
+}

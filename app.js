@@ -1855,20 +1855,30 @@
     void card.offsetWidth;
     card.classList.add('handoff-card');
   }
-  function guestOpen(coach, handoff) {
-    const topic = handoff.topic ? ' You wanted ' + handoff.topic + '.' : '';
-    const goal = handoff.goal ? ' Your goal: ' + handoff.goal + '.' : '';
-    if (coach.id === 'amara') return "Aria sent you over. I'm Amara." + topic + goal + ' One claim, then one reason. Say it.';
-    if (coach.id === 'jasmine') return "Aria introduced you. I'm Jasmine." + topic + " Tell me the scene the way you'd tell a friend.";
-    if (coach.id === 'renee') return "Aria pointed you here. I'm Renee." + topic + ' Who is in the room, and what should they leave with?';
-    return 'Aria introduced you.' + topic;
+  function experienceFor(coachId) {
+    if (coachId === 'marcus') {
+      const profile = loadLearner();
+      if (!profile.met) return 'new';
+      const nums = Object.keys(profile.domains || {}).map(k => Number(profile.domains[k]) || 0);
+      const avg = nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
+      return avg >= 70 ? 'experienced' : 'working';
+    }
+    const saved = readJSON('brimmesa.learner.' + coachId, null);
+    return saved && saved.level === 'experienced' ? 'experienced' : 'beginner';
   }
-  function scriptedGuest(id, value) {
-    const bit = String(value || '').trim().slice(0, 80);
-    if (id === 'amara') return 'I heard: ' + bit + '. Now the reason, in one line.';
-    if (id === 'jasmine') return 'Okay, the scene is ' + bit + '. Retell it to a friend who was not there.';
-    if (id === 'renee') return 'They heard ' + bit + '. Who was left out of that?';
-    return 'Got it. Say the next line.';
+  function markExperienced(coachId) {
+    if (!coachId || coachId === 'marcus') return;
+    const prior = readJSON('brimmesa.learner.' + coachId, {}) || {};
+    prior.level = 'experienced';
+    localStorage.setItem('brimmesa.learner.' + coachId, JSON.stringify(prior));
+  }
+  function guestOpen(coach, handoff) {
+    if (hostSession) hostSession.teachStep = 'invite';
+    return BrimLibrary.methodLine(coach.id, {
+      topic: handoff.topic,
+      goal: handoff.goal,
+      experienced: experienceFor(coach.id) === 'experienced'
+    });
   }
   async function returnToAria() {
     const topic = (hostSession && (hostSession.topic || hostSession.lastTopic)) || '';
@@ -1902,7 +1912,7 @@
     learner.step = 'know';
     learner.met = false;
     saveLearner(learner);
-    await play([{ speaker: 'marcus', text: 'Marcus. Security+, Network+, CySA+, that lane.' + topic + " What do you already know? Say it in your own words. Don't fluff it." }]);
+    await play([{ speaker: 'marcus', text: BrimLibrary.methodLine('marcus', { topic: handoff.topic, experienced: false }) }]);
   }
   async function finishAssess(learner) {
     const line = startingLine(learner);
@@ -1914,6 +1924,15 @@
   }
   async function assessTurn(value) {
     const learner = loadLearner();
+    if (/\bskip ahead\b/i.test(value)) {
+      learner.met = true;
+      learner.step = 'done';
+      learner.start = 'quiz';
+      if (learner.domains.cia == null) learner.domains.cia = 80;
+      saveLearner(learner);
+      await play([{ speaker: 'marcus', text: BrimLibrary.methodReply('marcus', value) }]);
+      return;
+    }
     if (learner.step === 'know') {
       const pre = scoreAnswer(value, PROBES[0].keys);
       if (pre.dims.accuracy >= 67) {
@@ -1973,45 +1992,49 @@
     return hit.url + (hit.url.indexOf('?') >= 0 ? '&' : '?') + 't=' + hit.start;
   }
   function scriptedFromNotes(coach, hit) {
-    const body = noteBody(hit);
-    if (hit.citeInConversation === false) {
-      if (coach.id === 'amara') return 'One claim. ' + body;
-      return body;
-    }
+    const spoken = BrimLibrary.methodReply(coach.id, '', { note: noteBody(hit) });
+    if (hit.citeInConversation === false) return spoken;
     const link = timedLink(hit);
     const when = hit.start == null ? '' : ' at ' + BrimLibrary.fmtTime(hit.start);
-    const cite = 'Source: ' + hit.title + (link ? ' ' + link : '') + when + '.';
-    if (coach.id === 'amara') return 'One claim. ' + body + ' ' + cite;
-    return body + ' ' + cite;
+    return spoken + ' Source: ' + hit.title + (link ? ' ' + link : '') + when + '.';
   }
   async function guestTurn(value) {
     const coach = cast.find(c => c.id === hostSession.coachId);
     if (!coach) return;
+    if (/\bskip ahead\b/i.test(value)) {
+      markExperienced(coach.id);
+      if (hostSession) hostSession.teachStep = 'invite';
+      await play([{ speaker: coach.id, text: BrimLibrary.methodReply(coach.id, value) }]);
+      return;
+    }
     const hits = lib.search(value + ' ' + (hostSession.topic || ''), { coach: coach.id, limit: 3 });
     const quiet = hits.length && hits[0].citeInConversation === false;
+    const wantsLesson = hits.length && /\b(explain|teach|what is|what's|difference|how does|tell me about)\b/i.test(value);
     let text = '';
-    if (hits.length && localStorage.getItem(GEMINI_KEY) && !llm.overLimit()) {
+    if (localStorage.getItem(GEMINI_KEY) && !llm.overLimit()) {
       try {
-        const got = await llm.generate(BrimLibrary.retrievalPrompt(coach, value, hits), null);
-        const clean = String(got || '').replace(/[*_`#]/g, '').replace(/\s+/g, ' ').trim().slice(0, 420);
-        if (clean) text = quiet ? scrubSource(clean, hits[0]) : clean;
+        const prompt = wantsLesson
+          ? BrimLibrary.retrievalPrompt(coach, value, hits)
+          : [
+            'You are ' + coach.name + '. Personality: ' + coach.personality,
+            coach.styleNote ? 'Style note: ' + coach.styleNote : '',
+            'Shared method when you are teaching: welcome, explain, demonstrate, invite, coach, encourage.',
+            'Beginners get the explanation and one example. Experienced people may skip ahead.',
+            'Not every turn is a lesson. Answer questions, humor, and tangents in your own voice.',
+            'Never demand an exercise before you have explained it.',
+            'Aria introduced this person. Goal: ' + (hostSession.goal || 'none') + '. Topic: ' + (hostSession.topic || 'none') + '.',
+            'Aria context: ' + (hostSession.ariaSummary || 'none'),
+            'Reply in one to three spoken sentences. No markdown. Write the brand as Brimmesa.',
+            'They said: ' + value.slice(0, 400)
+          ].filter(Boolean).join('\n');
+        const got = await llm.generate(prompt, null);
+        const clean = String(got || '').replace(/[*_`#]/g, '').replace(/\s+/g, ' ').trim().slice(0, 460);
+        if (clean) text = quiet ? scrubSource(clean, hits[0] || {}) : clean;
       } catch (e) {}
     }
-    if (!text && hits.length) text = scriptedFromNotes(coach, hits[0]);
-    if (!text && localStorage.getItem(GEMINI_KEY) && !llm.overLimit()) {
-      try {
-        const got = await llm.generate([
-          'You are ' + coach.name + '. Personality: ' + coach.personality,
-          'Aria introduced this person. Goal: ' + (hostSession.goal || 'none') + '. Topic: ' + (hostSession.topic || 'none') + '.',
-          'Aria context: ' + (hostSession.ariaSummary || 'none'),
-          'Reply in one or two spoken sentences. No markdown. Write the brand as Brimmesa.',
-          'They said: ' + value.slice(0, 400)
-        ].join('\n'), null);
-        const clean = String(got || '').replace(/[*_`#]/g, '').replace(/\s+/g, ' ').trim().slice(0, 320);
-        if (clean) text = clean;
-      } catch (e) {}
-    }
-    if (!text) text = scriptedGuest(coach.id, value);
+    if (!text && wantsLesson) text = scriptedFromNotes(coach, hits[0]);
+    if (!text) text = BrimLibrary.methodReply(coach.id, value);
+    if (hostSession) hostSession.teachStep = /\bskip ahead\b/i.test(value) ? 'invite' : 'coach';
     await play([{ speaker: coach.id, text: text }]);
   }
   async function coachTurn(value) {

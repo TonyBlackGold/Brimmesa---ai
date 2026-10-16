@@ -511,8 +511,22 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
   assert.equal(amaraItem.citeInConversation, false);
   assert.equal(amaraHit.citeInConversation, false);
   assert.equal(Lib.citesInConversation({ coaches: ['marcus'] }), true);
-  const quietPrompt = Lib.retrievalPrompt({ name: 'Coach Amara', personality: 'Calm and exacting.' }, 'act or art', [amaraHit]);
-  assert(/own coaching/i.test(quietPrompt) && !/Cite each source/i.test(quietPrompt) && !/youtube/i.test(quietPrompt) && !/Bosshogg/i.test(quietPrompt));
+  const quietPrompt = Lib.retrievalPrompt({ name: 'Coach Amara', personality: 'Calm and exacting.', styleNote: 'States the standard, then gets warm.' }, 'act or art', [amaraHit]);
+  assert(/own coaching/i.test(quietPrompt) && /welcome, explain/i.test(quietPrompt) && !/Cite each source/i.test(quietPrompt) && !/youtube/i.test(quietPrompt) && !/Bosshogg/i.test(quietPrompt));
+  assert.equal(Lib.METHOD.map(s => s.id).join(','), 'welcome,explain,demonstrate,invite,coach,encourage');
+  const amaraOpen = Lib.methodLine('amara', { topic: 'the magic moment' });
+  assert(/Morning walks make my whole day better/.test(amaraOpen) && /kids wake up/.test(amaraOpen) && /skip ahead/i.test(amaraOpen));
+  assert(!/one claim, then one reason/i.test(amaraOpen) && !/first claim/i.test(amaraOpen));
+  const amaraHard = Lib.methodLine('amara', { experienced: true, topic: 'focus' });
+  assert(/skip ahead/i.test(amaraHard) && amaraHard.length < amaraOpen.length);
+  assert(/progress/i.test(Lib.methodReply('amara', 'Morning pages steady me because the house is quiet')));
+  manifest.files.filter(p => /amara\//.test(p)).forEach(p => {
+    const doc = JSON.parse(fs.readFileSync(p, 'utf8'));
+    const item = doc.items[0];
+    assert(item.citeInConversation === false && item.chunks.length >= 10 && item.chunks.length <= 25);
+    assert(!/\b(fuck|shit|bitch|hoe|pimp)\b/i.test(JSON.stringify(item.chunks)));
+    assert(item.chunks.every(c => /[?&]t=\d+/.test(c.text)));
+  });
 
   console.log('\nALL TESTS PASSED');
 })().catch(err => { console.error('FAIL', err); process.exit(1); });

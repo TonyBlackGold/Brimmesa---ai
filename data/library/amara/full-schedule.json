@@ -1,0 +1,79 @@
+{
+  "items": [
+    {
+      "id": "atlas-amara-full-schedule",
+      "coaches": ["amara"],
+      "title": "Bosshogg Macaroni is live! Keep a full schedule",
+      "sourceType": "notes",
+      "url": "https://www.youtube.com/watch?v=SLVtSjXZ7UM",
+      "channel": "Bosshogg Macaroni",
+      "timestamps": [20, 89, 116, 131, 165, 174, 180, 207, 480, 1920, 2880, 3360],
+      "chunks": [
+        {
+          "id": "c0",
+          "start": 20,
+          "text": "Name where you want to arrive, then work backward. The customers, the sales, the years, or the credential are the steps, not a mood. Link: https://www.youtube.com/watch?v=SLVtSjXZ7UM&t=20"
+        },
+        {
+          "id": "c1",
+          "start": 89,
+          "text": "There is always something you can do. Throwing your hands up is not a plan. If you cannot see the move, look at a smaller one that still changes the day. Link: https://www.youtube.com/watch?v=SLVtSjXZ7UM&t=89"
+        },
+        {
+          "id": "c2",
+          "start": 116,
+          "text": "Taking care of home can be a byproduct of the work. Use the skill to attract a larger collaboration, not only to cover this week. Link: https://www.youtube.com/watch?v=SLVtSjXZ7UM&t=116"
+        },
+        {
+          "id": "c3",
+          "start": 131,
+          "text": "Pair skills on purpose. A writer, a builder, a product person, and someone who can tell the story can each earn their keep. You can see when a seat is empty. Link: https://www.youtube.com/watch?v=SLVtSjXZ7UM&t=131"
+        },
+        {
+          "id": "c4",
+          "start": 165,
+          "text": "You are not meant to do every job. You are meant to do enough of the work that you can hold what you have gathered. Link: https://www.youtube.com/watch?v=SLVtSjXZ7UM&t=165"
+        },
+        {
+          "id": "c5",
+          "start": 174,
+          "text": "Aim past survival. Enough to get through the month is not the same as enough to thrive. Link: https://www.youtube.com/watch?v=SLVtSjXZ7UM&t=174"
+        },
+        {
+          "id": "c6",
+          "start": 180,
+          "text": "Keep a full schedule of what you are responsible for. A wish list is not a schedule until the hours exist. Link: https://www.youtube.com/watch?v=SLVtSjXZ7UM&t=180"
+        },
+        {
+          "id": "c7",
+          "start": 207,
+          "text": "A full schedule is hard when you do not know the required list. Start with what you are actually responsible for, not only the household errands. Link: https://www.youtube.com/watch?v=SLVtSjXZ7UM&t=207"
+        },
+        {
+          "id": "c8",
+          "start": 480,
+          "text": "Do not skip the small tool or the small lesson because the price looks minor. The thing you almost pass on is often what keeps you in the work. Link: https://www.youtube.com/watch?v=SLVtSjXZ7UM&t=480"
+        },
+        {
+          "id": "c9",
+          "start": 1920,
+          "text": "If the room is not yours, do not stay and perform in it. Leaving a page that is not for you is cleaner than pretending. Link: https://www.youtube.com/watch?v=SLVtSjXZ7UM&t=1920"
+        },
+        {
+          "id": "c10",
+          "start": 2880,
+          "text": "The standard you grew up seeing is not the only standard. You can learn what was normal around you, then choose a higher one. Link: https://www.youtube.com/watch?v=SLVtSjXZ7UM&t=2880"
+        },
+        {
+          "id": "c11",
+          "start": 3360,
+          "text": "A place had a name and a way of doing things before you arrived. Learn that, then add your part. Do not pretend you started the street. Link: https://www.youtube.com/watch?v=SLVtSjXZ7UM&t=3360"
+        }
+      ],
+      "tags": ["mindset", "schedule", "planning", "purpose"],
+      "attribution": "Original Brimmesa lesson notes for Coach Amara from Bosshogg Macaroni, YouTube live SLVtSjXZ7UM, titled Keep a full schedule, channel https://www.youtube.com/@bosshoggmacaroni6462, about 58 minutes. Not a transcript and not the speaker's words. Profanity and unrelated asides were left out.",
+      "citeInConversation": false,
+      "hashKey": "atlas:amara:full-schedule"
+    }
+  ]
+}

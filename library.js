@@ -110,13 +110,15 @@
       'You are ' + (who.name || 'the coach') + '.',
       'Personality, separate from the notes: ' + (who.personality || ''),
       'Explain in your own words and your own slang. Never paste long verbatim source text. A short phrase at most.',
+      'Shared method, in your own voice: welcome, explain, demonstrate, invite, coach, encourage. Beginners get the explanation and one example. Experienced people may skip ahead. Questions, humor, and tangents are allowed. Not every turn is a lesson.',
+      (who.styleNote ? 'Style note: ' + who.styleNote : ''),
       cite
         ? 'Cite each source you use as its title, link, and timestamp when you have them.'
         : 'Teach these ideas as your own coaching. Do not mention a source, title, channel, link, timestamp, video, or that the idea came from notes.',
       'Write the brand as Brimmesa, mixed case. One to three spoken sentences. No markdown.',
       'Notes:\n' + (notes || '(none)'),
       'Question: ' + String(query || '')
-    ].join('\n');
+    ].filter(Boolean).join('\n');
   }
 
   function createLibrary(storage) {
@@ -429,6 +431,66 @@
     return { dims: dims, overall: overall, tip: String(j.tip || fallback.tip).slice(0, 140), low: fallback.low, source: 'gemini' };
   }
 
+  const METHOD = [
+    { id: 'welcome', label: 'Welcome' },
+    { id: 'explain', label: 'Explain' },
+    { id: 'demonstrate', label: 'Demonstrate' },
+    { id: 'invite', label: 'Invite' },
+    { id: 'coach', label: 'Coach' },
+    { id: 'encourage', label: 'Encourage' }
+  ];
+  function methodLine(coachId, opts) {
+    const o = opts || {};
+    const topic = o.topic ? ' You wanted ' + o.topic + '.' : '';
+    const goal = o.goal ? ' Your goal: ' + o.goal + '.' : '';
+    const experienced = !!o.experienced;
+    if (coachId === 'amara') {
+      if (experienced) return "Aria sent you over. I'm Amara." + topic + " You already know this. A claim is the point. A reason is why it is true for you. Skip ahead: say both to a skeptical friend. Or stay and we'll do one clean pass.";
+      return "Aria sent you over. I'm Amara. I help you say what you mean so another person could repeat it." + topic + goal + " A claim is the point, in one plain sentence. A reason is why that point is true for you. For example, claim: Morning walks make my whole day better. Reason: They clear my head before the kids wake up. If you want, try one of your own. Or tell me what's actually on your mind. You can skip ahead if this is already easy.";
+    }
+    if (coachId === 'jasmine') {
+      if (experienced) return "Aria introduced you. I'm Jasmine." + topic + " You can skip ahead. Tell the scene to a friend who was not there, with one joke that still respects them.";
+      return "Aria introduced you. I'm Jasmine. I help you turn a point into a scene a friend could retell." + topic + " The exercise is a tiny story, because a story sticks. For example: I saw them holding the paprika and I said it looked dangerous in the best way. Your turn, in your own words. Or just talk. You can skip ahead.";
+    }
+    if (coachId === 'renee') {
+      if (experienced) return "Aria pointed you here. I'm Renee." + topic + " Skip ahead if you want. Name who was left out, and say the line again for them.";
+      return "Aria pointed you here. I'm Renee. I help you notice who is actually in the room." + topic + " The exercise is to name the listener before you pick the words, because the words change. For example: the claim is that you want a plan for the weekend. The reason is that someone was left looking at their phone. Try yours. Or ask me something else. You can skip ahead.";
+    }
+    if (coachId === 'marcus') {
+      if (experienced) return "Marcus." + topic + " You can skip ahead. Say quiz, or say challenge if you want the harder set.";
+      return "Marcus. Security+, Network+, CySA+, that lane." + topic + " I ask what you know so I don't start you in the wrong room. A straight answer sounds like: I can explain the CIA triad, and phishing is still fuzzy. What do you already know? Say it plain. You can skip ahead if you want the harder set.";
+    }
+    return "I'm glad you are here." + topic + " Tell me what you want to practice. You can skip ahead.";
+  }
+  function methodReply(coachId, text, opts) {
+    const o = opts || {};
+    const said = String(text || '').trim();
+    const bit = said.slice(0, 90);
+    if (/\bskip ahead\b/i.test(said)) {
+      if (coachId === 'amara') return "Skip ahead. Say one claim and one reason to a skeptical friend. I'll tell you what landed, then we'll go further.";
+      if (coachId === 'jasmine') return "Skip ahead. Tell that scene to a friend who was not there. Make it short enough to retell.";
+      if (coachId === 'renee') return "Skip ahead. Who was left out of the last thing you said? Say it again for them.";
+      if (coachId === 'marcus') return "Skip ahead. Say quiz for five questions, or challenge if you want the harder set.";
+      return "Skip ahead. Give me the harder version.";
+    }
+    if (/[?]/.test(said) || /^(what|why|how|who|can you|tell me|i was wondering)\b/i.test(said)) {
+      if (coachId === 'amara') return "Good question. Stay with me on it. " + bit + " That's worth a real answer, and we can come back to a claim and a reason when you want.";
+      if (coachId === 'jasmine') return "Ha, okay, we'll stay on that. " + bit + " Tell me the rest like a story, or ask the next question.";
+      if (coachId === 'renee') return "Fair. " + bit + " Who else needs to hear the answer to that?";
+      if (coachId === 'marcus') return "Ask it straight. " + bit + " I'll answer, then you can say quiz or challenge.";
+      return "Ask it. " + bit;
+    }
+    if (o.note) {
+      const body = lessonText(o.note);
+      if (coachId === 'amara') return "Let me say this in plain words. " + body + " It matters the next time you have to say something hard out loud. Try it in your own words, or tell me what's on your mind. You can skip ahead.";
+      return body;
+    }
+    if (coachId === 'amara') return "I heard you. The strong part is that you said it in your own words. If the reason is still thin, add why it is true for you, the way the morning walk clears your head. That is progress. Want another try, or a harder one?";
+    if (coachId === 'jasmine') return "That scene lands. " + bit + " Now retell it to a friend who was not there. You're getting warmer.";
+    if (coachId === 'renee') return "I heard it. " + bit + " Check who was in the room and whether they could repeat it. Then take the next step.";
+    if (coachId === 'marcus') return "Noted. " + bit + " Say the harder version, or say quiz.";
+    return "I heard you. " + bit + " Take the next step.";
+  }
   const HOSTS = [
     { id: 'marcus', place: 'the Cybersecurity Academy', dest: 'skills', line: "Absolutely! Marcus is over at the Cybersecurity Academy. Come on, I'll introduce you." },
     { id: 'amara', place: 'Mindset and Purpose', dest: 'mindset', line: "Absolutely! Amara is at Mindset and Purpose. Come on, I'll introduce you." },
@@ -444,6 +506,6 @@
     return { coachId: coach.id, topic: about ? about[1].trim() : '', place: coach.place, dest: coach.dest, line: coach.line };
   }
 
-  const api = { createLibrary, hash, chunkText, parseTimed, parseTakeout, youtube, retrievalPrompt, citesInConversation, lessonText, fmtTime, LOOP, DIMENSIONS, challenge, rubric, feedbackText, evalPrompt, readScores, keywordIntent, HOSTS };
+  const api = { createLibrary, hash, chunkText, parseTimed, parseTakeout, youtube, retrievalPrompt, citesInConversation, lessonText, fmtTime, LOOP, METHOD, methodLine, methodReply, DIMENSIONS, challenge, rubric, feedbackText, evalPrompt, readScores, keywordIntent, HOSTS };
   if (typeof module !== 'undefined') module.exports = api; else root.BrimLibrary = api;
 })(this);
