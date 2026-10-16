@@ -417,7 +417,7 @@
     const dest = opts.dest || {};
     const zx = dest.x != null ? dest.x : end[0];
     const zy = dest.y != null ? dest.y : end[1];
-    park(end[0], end[1], -1, aria);
+    park(Math.max(6, end[0] - 7), Math.min(92, end[1] + 3), -1, aria);
     if (root.BrimMap && root.BrimMap.look) root.BrimMap.look(zx, zy, skipped || reduceMotion() ? 2.05 : 2.15, { ms: skipped ? 0 : 420 });
     if (!skipped && !reduceMotion()) await wait(460, gen);
     if (document.body) document.body.dataset.walk = 'arrived';
