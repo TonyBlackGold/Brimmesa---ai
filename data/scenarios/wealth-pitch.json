@@ -1,0 +1,243 @@
+{
+  "id": "wealth-pitch",
+  "skill": "wealth.pitch",
+  "feedbackLabel": "the business pitch",
+  "setting": "You are across a small table from Aria, an investor. You have about a minute. Pitch who you help, what it costs them today, and the next step you want.",
+  "sceneNote": "Adults only. Respectful practice. No sexual content, no pressure, no appearance ratings, no contact details, no private meetups. Aria is a calm investor hearing a short business pitch. She asks practical questions. She does not offer money on the spot.",
+  "characters": [
+    {
+      "id": "aria",
+      "name": "Aria",
+      "trait": "warm, encouraging, specific",
+      "voice": {
+        "pitch": 1.05,
+        "rate": 1,
+        "index": 1
+      }
+    }
+  ],
+  "maxTurns": 4,
+  "signals": {
+    "greeting": [
+      "hi",
+      "hello",
+      "hey",
+      "good morning",
+      "good afternoon"
+    ],
+    "context": [
+      "customer",
+      "client",
+      "offer",
+      "price",
+      "cost",
+      "save",
+      "revenue",
+      "problem",
+      "pitch",
+      "business",
+      "deal",
+      "proposal"
+    ],
+    "question": [
+      "?",
+      "what",
+      "how",
+      "which",
+      "could you",
+      "can you",
+      "would you",
+      "do you"
+    ],
+    "intro": [
+      "i'm ",
+      "i am ",
+      "my name",
+      "i work",
+      "i help",
+      "i train",
+      "i run"
+    ],
+    "humor": [
+      "haha",
+      "honestly",
+      "funny",
+      "luckily",
+      "between us",
+      "fair warning"
+    ],
+    "inclusive": [
+      "how about you",
+      "what do you think",
+      "your team",
+      "together",
+      "what about you",
+      "and you"
+    ],
+    "pushy": [
+      "your number",
+      "phone number",
+      "sexy",
+      "you're hot",
+      "you are hot",
+      "come on",
+      "you have to",
+      "right now or"
+    ],
+    "exit": [
+      "nice meeting",
+      "thank you",
+      "thanks",
+      "goodbye",
+      "bye",
+      "have a good",
+      "next step",
+      "talk soon",
+      "see you"
+    ]
+  },
+  "responses": {
+    "open_good": [
+      {
+        "speaker": "aria",
+        "text": "I am listening. Who is this for, and what changes for them?"
+      }
+    ],
+    "open_flat": [
+      {
+        "speaker": "aria",
+        "text": "Start with the person you serve. I do not need the whole history."
+      }
+    ],
+    "context": [
+      {
+        "speaker": "aria",
+        "text": "That problem is clear. What do they pay, in time or money, while it stays unsolved?"
+      }
+    ],
+    "question": [
+      {
+        "speaker": "aria",
+        "text": "Good question to turn back on me. Here is mine: why you, and why now?"
+      }
+    ],
+    "humor": [
+      {
+        "speaker": "aria",
+        "text": "That landed. Keep that ease, then give me the number."
+      }
+    ],
+    "intro": [
+      {
+        "speaker": "aria",
+        "text": "Good. I know who I am talking to. What is the offer in one sentence?"
+      }
+    ],
+    "inclusive": [
+      {
+        "speaker": "aria",
+        "text": "I like that you asked what I need to see. Show me the next step, not the whole company."
+      }
+    ],
+    "pushy": [
+      {
+        "speaker": "aria",
+        "text": "That is too much pressure for a first meeting. We can stop here."
+      }
+    ],
+    "neutral": [
+      {
+        "speaker": "aria",
+        "text": "Say it more plainly. Who do you help, and what do you want from me?"
+      }
+    ],
+    "exit": [
+      {
+        "speaker": "aria",
+        "text": "Thank you. Send the one-page version and we can look at a real next step."
+      }
+    ],
+    "timeout": [
+      {
+        "speaker": "aria",
+        "text": "I have what I need for now. Close with the ask, then we are done."
+      }
+    ]
+  },
+  "rubric": [
+    {
+      "id": "greeting",
+      "label": "Clear opener",
+      "points": 15,
+      "tip": "Start with a calm hello and your point."
+    },
+    {
+      "id": "context",
+      "label": "Used the real situation",
+      "points": 20,
+      "tip": "Name the thing in front of you, not a generic line."
+    },
+    {
+      "id": "question",
+      "label": "Asked a real question",
+      "points": 20,
+      "tip": "Ask one open question so they can answer."
+    },
+    {
+      "id": "intro",
+      "label": "Said who you are",
+      "points": 10,
+      "tip": "One short line about who you are is enough."
+    },
+    {
+      "id": "humor",
+      "label": "Easy tone",
+      "points": 10,
+      "tip": "A little warmth beats a stiff speech."
+    },
+    {
+      "id": "inclusive",
+      "label": "Left room for them",
+      "points": 10,
+      "tip": "Invite their view instead of talking over them."
+    },
+    {
+      "id": "exit",
+      "label": "Clean close",
+      "points": 15,
+      "tip": "End with thanks and a next step."
+    }
+  ],
+  "penalties": [
+    {
+      "id": "pushy",
+      "label": "Pushy or personal remark",
+      "points": 30,
+      "tip": "Drop pressure. Stay on the topic and their comfort."
+    }
+  ],
+  "dimensions": [
+    {
+      "label": "Clarity",
+      "signals": [
+        "question",
+        "context"
+      ]
+    },
+    {
+      "label": "Confidence",
+      "signals": [
+        "greeting",
+        "exit",
+        "humor"
+      ]
+    },
+    {
+      "label": "Warmth",
+      "signals": [
+        "inclusive",
+        "intro"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,240 @@
+{
+  "id": "network-talk",
+  "skill": "lifestyle.network",
+  "feedbackLabel": "the networking conversation",
+  "setting": "You are at an evening gathering. Renee is standing near the food, not performing. Introduce yourself, ask what she is working on, and offer one useful thing. Then let her go.",
+  "sceneNote": "Adults only. Respectful practice. No sexual content, no pressure, no appearance ratings, no contact details, no private meetups. Renee is a guest at a networking evening. Poised, slightly guarded, never rude.",
+  "characters": [
+    {
+      "id": "renee",
+      "name": "Renee",
+      "trait": "poised, a little dry",
+      "voice": {
+        "pitch": 0.9,
+        "rate": 0.96,
+        "index": 2
+      }
+    }
+  ],
+  "maxTurns": 4,
+  "signals": {
+    "greeting": [
+      "hi",
+      "hello",
+      "hey",
+      "good morning",
+      "good afternoon"
+    ],
+    "context": [
+      "event",
+      "work",
+      "project",
+      "introduce",
+      "network",
+      "room",
+      "host",
+      "field",
+      "company"
+    ],
+    "question": [
+      "?",
+      "what",
+      "how",
+      "which",
+      "could you",
+      "can you",
+      "would you",
+      "do you"
+    ],
+    "intro": [
+      "i'm ",
+      "i am ",
+      "my name",
+      "i work",
+      "i help",
+      "i train",
+      "i run"
+    ],
+    "humor": [
+      "haha",
+      "honestly",
+      "funny",
+      "luckily",
+      "between us",
+      "fair warning"
+    ],
+    "inclusive": [
+      "how about you",
+      "what do you think",
+      "your team",
+      "together",
+      "what about you",
+      "and you"
+    ],
+    "pushy": [
+      "your number",
+      "phone number",
+      "sexy",
+      "you're hot",
+      "you are hot",
+      "come on",
+      "you have to",
+      "right now or"
+    ],
+    "exit": [
+      "nice meeting",
+      "thank you",
+      "thanks",
+      "goodbye",
+      "bye",
+      "have a good",
+      "next step",
+      "talk soon",
+      "see you"
+    ]
+  },
+  "responses": {
+    "open_good": [
+      {
+        "speaker": "renee",
+        "text": "Hello. I was about to escape the small talk. What brought you here?"
+      }
+    ],
+    "open_flat": [
+      {
+        "speaker": "renee",
+        "text": "Hi. If this is a pitch, give me the short version."
+      }
+    ],
+    "context": [
+      {
+        "speaker": "renee",
+        "text": "That is specific. Most people just say they do a bit of everything."
+      }
+    ],
+    "question": [
+      {
+        "speaker": "renee",
+        "text": "I am building a quiet practice and trying not to perform it. What are you hoping to find in this room?"
+      }
+    ],
+    "humor": [
+      {
+        "speaker": "renee",
+        "text": "Fair warning accepted. You are better at this than the last three people."
+      }
+    ],
+    "intro": [
+      {
+        "speaker": "renee",
+        "text": "I am Renee. Say your name once more so I actually keep it."
+      }
+    ],
+    "inclusive": [
+      {
+        "speaker": "renee",
+        "text": "Thank you for asking what I need, not just what you offer."
+      }
+    ],
+    "pushy": [
+      {
+        "speaker": "renee",
+        "text": "I do not share contact details with someone who pushes. Enjoy the evening."
+      }
+    ],
+    "neutral": [
+      {
+        "speaker": "renee",
+        "text": "Go on, but keep it to a sentence or two."
+      }
+    ],
+    "exit": [
+      {
+        "speaker": "renee",
+        "text": "This was enough. Thank you. If we talk again, remind me of this conversation, not your title."
+      }
+    ],
+    "timeout": [
+      {
+        "speaker": "renee",
+        "text": "I am going to find the host. It was good to meet you."
+      }
+    ]
+  },
+  "rubric": [
+    {
+      "id": "greeting",
+      "label": "Clear opener",
+      "points": 15,
+      "tip": "Start with a calm hello and your point."
+    },
+    {
+      "id": "context",
+      "label": "Used the real situation",
+      "points": 20,
+      "tip": "Name the thing in front of you, not a generic line."
+    },
+    {
+      "id": "question",
+      "label": "Asked a real question",
+      "points": 20,
+      "tip": "Ask one open question so they can answer."
+    },
+    {
+      "id": "intro",
+      "label": "Said who you are",
+      "points": 10,
+      "tip": "One short line about who you are is enough."
+    },
+    {
+      "id": "humor",
+      "label": "Easy tone",
+      "points": 10,
+      "tip": "A little warmth beats a stiff speech."
+    },
+    {
+      "id": "inclusive",
+      "label": "Left room for them",
+      "points": 10,
+      "tip": "Invite their view instead of talking over them."
+    },
+    {
+      "id": "exit",
+      "label": "Clean close",
+      "points": 15,
+      "tip": "End with thanks and a next step."
+    }
+  ],
+  "penalties": [
+    {
+      "id": "pushy",
+      "label": "Pushy or personal remark",
+      "points": 30,
+      "tip": "Drop pressure. Stay on the topic and their comfort."
+    }
+  ],
+  "dimensions": [
+    {
+      "label": "Clarity",
+      "signals": [
+        "question",
+        "context"
+      ]
+    },
+    {
+      "label": "Confidence",
+      "signals": [
+        "greeting",
+        "exit",
+        "humor"
+      ]
+    },
+    {
+      "label": "Warmth",
+      "signals": [
+        "inclusive",
+        "intro"
+      ]
+    }
+  ]
+}

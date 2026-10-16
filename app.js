@@ -14,6 +14,8 @@
   const worlds = await (await fetch('data/worlds.json')).json();
   const areasDoc = await (await fetch('data/areas.json')).json();
   const castDoc = await (await fetch('data/characters.json')).json();
+  const destDoc = await (await fetch('data/destinations.json')).json();
+  const destinations = destDoc.destinations || [];
   const areas = areasDoc.areas;
   const cast = castDoc.characters;
   const content = {};
@@ -26,7 +28,10 @@
     const row = cast.find(c => c.speakerId === speaker || (speaker === 'coach' && c.id === 'amara'));
     return row && row.portrait;
   };
-  cast.forEach(c => document.querySelectorAll('[data-portrait="' + c.id + '"]').forEach(img => { img.src = c.portrait; }));
+  cast.forEach(c => {
+    if (c.speakerId) chars[c.speakerId] = Object.assign({}, chars[c.speakerId] || {}, c, { color: (chars[c.speakerId] && chars[c.speakerId].color) || '#e0b65a' });
+    document.querySelectorAll('[data-portrait="' + c.id + '"]').forEach(img => { img.src = c.portrait; });
+  });
 
   const profile = JSON.parse(localStorage.getItem(KEY) || 'null') || BrimEngine.newProfile();
   const eng = new BrimEngine.Engine({ worlds, content, profile, areas });
@@ -519,6 +524,17 @@
     d.append(t);
     $('log').append(d);
     $('log').scrollTop = 1e9;
+    pushComic(line);
+  }
+  function pushComic(line) {
+    const box = $('comic');
+    if (!box) return;
+    const who = (chars[line.speaker] && chars[line.speaker].name) || line.speaker;
+    const feedback = /Coach feedback|Scores:/.test(line.text || '');
+    const panel = el('article', 'panel ' + (line.speaker === 'user' ? 'user' : line.speaker) + (feedback ? ' feedback' : ''));
+    panel.append(el('p', 'who', who), el('p', null, line.text));
+    box.append(panel);
+    while (box.children.length > 6) box.firstChild.remove();
   }
   function setCaption(line) {
     const name = line.speaker === 'user' ? 'You' : (chars[line.speaker] || chars.coach).name;
@@ -526,25 +542,33 @@
     $('caption').textContent = line.text;
     $('liveName').textContent = name;
     $('liveLine').textContent = line.text;
+    if ($('ariaLine') && line.speaker !== 'user') $('ariaLine').textContent = line.text;
+  }
+  function present(line) {
+    if (!line || line.speaker !== 'coach' || document.body.dataset.view === 'area') return line;
+    return Object.assign({}, line, { speaker: 'aria' });
   }
   function idleCaption() {
-    $('bubbleName').textContent = 'Coach Amara';
-    $('liveName').textContent = 'Coach Amara';
+    $('bubbleName').textContent = 'Aria';
+    $('liveName').textContent = 'Aria';
     const text = eng.p.name
-      ? 'Hey ' + eng.p.name + '! Where would you like to go today?'
-      : "I'm Amara, your coach. What should I call you?";
+      ? 'Hey ' + eng.p.name + '. Where on the map should we practice?'
+      : "I'm Aria. What should I call you?";
     $('caption').textContent = text;
     $('liveLine').textContent = text;
+    const aria = $('ariaLine');
+    if (aria) aria.textContent = text;
   }
   async function play(lines) {
     const id = ++playId;
     busy = true; stopSpeaking = false; stopListening();
     for (const l of lines || []) {
-      show(l); setCaption(l);
+      const shown = present(l);
+      show(shown); setCaption(shown);
       if (l.emotion && face) face.react(l.emotion);
       setAvatarState('speaking', { speaker: l.speaker });
       if (id !== playId) return;
-      await speak(l);
+      await speak(shown);
       if (id !== playId) return;
     }
     if (id !== playId) return;
@@ -608,7 +632,14 @@
   function stopListening() { if (rec && listening) { try { rec.abort(); } catch (e) {} listening = false; $('mic').classList.remove('on'); } }
   $('mic').onclick = () => {
     unlockAudio();
-    if (!greeted) { greeted = true; play(eng.welcome()); return; }
+    if (!greeted) {
+      greeted = true;
+      const line = !eng.p.name
+        ? "Welcome to Brimmesa. I'm Aria. What should I call you?"
+        : 'Welcome back, ' + eng.p.name + '. Pick a glowing stop, or tell me where you want to practice.';
+      play([{ speaker: 'aria', text: line }]);
+      return;
+    }
     misses = 0;
     if (listening) { misses = 99; stopListening(); setAvatarState('idle', { speaker: 'coach' }); return; }
     interrupt();
@@ -640,14 +671,25 @@
     silentHash++;
     location.hash = hash;
   }
+  function showWorld(name) {
+    const ids = { map: 'viewMap', missions: 'viewMissions', coaches: 'viewCoaches', scenarios: 'viewScenarios', progress: 'viewProgress' };
+    document.body.dataset.view = name;
+    Object.entries(ids).forEach(([key, id]) => { const node = $(id); if (node) node.hidden = key !== name; });
+    document.querySelectorAll('.bottomnav button').forEach(btn => btn.classList.remove('on'));
+    const tab = { map: 'tabMap', missions: 'tabMissions', coaches: 'tabCoaches', scenarios: 'tabScenarios', progress: 'tabProgress' }[name];
+    if ($(tab)) $(tab).classList.add('on');
+    if (name === 'missions') renderMissions();
+    if (name === 'coaches') renderCoaches();
+    if (name === 'scenarios') renderScenarios();
+    if (name === 'progress') renderProgress();
+    if (face) face.setVisible(false);
+  }
   function showHome(opts) {
-    document.body.dataset.view = 'home';
     $('areaView').hidden = true;
     if (!opts || !opts.keepHash) setRoute('#/');
     document.querySelectorAll('[data-area]').forEach(btn => btn.classList.remove('on'));
     document.body.classList.remove('nav-open');
-    $('tabHome').classList.add('on');
-    if (face) face.setVisible(true);
+    showWorld('map');
   }
   function showArea(area) {
     document.body.dataset.view = 'area';
@@ -872,6 +914,7 @@
     $('journeyPct').textContent = overallPercent() + '%';
     $('drive').checked = !!p.driving;
     $('driveNote').hidden = !p.driving;
+    renderMission();
     areas.forEach(area => {
       const n = areaPercent(area);
       document.querySelectorAll('[data-pct="' + area.id + '"]').forEach(node => { node.textContent = n + '%'; });
@@ -1111,7 +1154,7 @@
     set3dStatus('loading portrait');
     ensureFace().then(api => { if (api && document.body.dataset.view === 'home') api.setVisible(true); });
   };
-  bootAvatar();
+  window.BrimFuture = BrimEngine.futureHooks || { realisticAvatar: { implemented: false }, heygen: { implemented: false } };
   const voiceBox = $('voicePreviews');
   if (voiceBox) cast.forEach(row => {
     const b = document.createElement('button');
@@ -1135,10 +1178,174 @@
   $('challengeGo').onclick = () => { const id = $('challengeGo').dataset.activity; if (id) launchActivity(activityById(id)); };
   $('menuBtn').onclick = () => document.body.classList.toggle('nav-open');
   $('scrim').onclick = () => document.body.classList.remove('nav-open');
-  $('tabHome').onclick = () => showHome();
-  $('tabMap').onclick = () => document.body.classList.add('nav-open');
-  $('tabTeam').onclick = () => { showHome(); $('team').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
-  $('tabJourney').onclick = openHistory;
+  $('tabMap').onclick = () => showHome();
+  $('tabMissions').onclick = () => showWorld('missions');
+  $('tabCoaches').onclick = () => showWorld('coaches');
+  $('tabScenarios').onclick = () => showWorld('scenarios');
+  $('tabProgress').onclick = () => showWorld('progress');
+  $('tabSettings').onclick = () => $('settingsDlg').showModal();
+
+  function missionFor(id) { return (eng.p.missions || {})[id] || null; }
+  function renderMission() {
+    const title = $('missionTitle');
+    if (!title) return;
+    const next = destinations.find(d => d.activityId && !missionFor(d.activityId)) || destinations.find(d => d.activityId);
+    if (!next) return;
+    title.textContent = next.title;
+    $('missionText').textContent = next.blurb || 'Spoken practice.';
+    const done = next.activityId && missionFor(next.activityId);
+    $('missionGo').textContent = done ? 'Practice again' : 'Start';
+    $('missionGo').onclick = () => startDestination(next);
+  }
+  function renderMissions() {
+    const list = $('missionList');
+    if (!list) return;
+    list.replaceChildren();
+    destinations.filter(d => d.activityId).forEach(d => {
+      const done = missionFor(d.activityId);
+      const b = el('button', 'list-card');
+      b.type = 'button';
+      b.append(el('strong', null, d.title), el('small', null, (done ? 'Done · best ' + done.score + '. ' : 'Not finished. ') + (d.blurb || '')));
+      b.onclick = () => startDestination(d);
+      list.append(b);
+    });
+  }
+  function renderCoaches() {
+    const grid = $('coachGrid');
+    if (!grid || grid.childElementCount) return;
+    cast.forEach(c => {
+      const b = el('button', 'list-card');
+      b.type = 'button';
+      const img = el('img');
+      img.src = c.portrait;
+      img.alt = '';
+      b.append(img, el('strong', null, c.name), el('small', null, c.role));
+      b.onclick = () => {
+        if (c.id === 'aria') { showHome(); openCentral(); return; }
+        if (c.id === 'amara') { launchArea('mindset'); return; }
+        if (c.activityId) launchActivity(activityById(c.activityId));
+      };
+      grid.append(b);
+    });
+  }
+  function renderScenarios() {
+    const list = $('scenarioList');
+    if (!list) return;
+    list.replaceChildren();
+    eng.activities().forEach(a => {
+      const b = el('button', 'list-card');
+      b.type = 'button';
+      const m = eng.p.mastery[content[a.id].skill];
+      b.append(el('strong', null, a.title), el('small', null, (m && m.attempts ? 'Best ' + m.best + '. ' : '') + a.world));
+      b.onclick = () => launchActivity(a);
+      list.append(b);
+    });
+  }
+  function renderProgress() {
+    if ($('progressLead')) $('progressLead').textContent = eng.progressSummary();
+    const list = $('progressList');
+    if (!list) return;
+    list.replaceChildren();
+    (eng.p.history || []).slice(0, 8).forEach(h => {
+      const row = el('article', 'list-card');
+      row.append(el('strong', null, h.activity + ' · ' + h.score), el('small', null, h.summary || ''));
+      list.append(row);
+    });
+  }
+  function startDestination(d) {
+    if (!d) return;
+    unlockAudio();
+    greeted = true;
+    showHome();
+    if (!d.activityId) { openCentral(); return; }
+    const act = activityById(d.activityId);
+    if (act) launchActivity(act);
+  }
+  function openCentral() {
+    unlockAudio();
+    greeted = true;
+    const goal = eng.p.goal ? ' I remember your goal: ' + eng.p.goal + '.' : '';
+    const name = eng.p.name ? eng.p.name + ', ' : '';
+    play([{ speaker: 'aria', text: name + 'this is Brimmesa Central.' + goal + ' Choose a glowing stop and say the scene out loud. I will score clarity, confidence, and warmth.' }]);
+  }
+  function setupMap() {
+    const host = $('hotspots');
+    const stage = $('mapStage');
+    const world = $('mapWorld');
+    if (!host || !stage || !world) return;
+    destinations.forEach(d => {
+      const b = el('button', 'hotspot');
+      b.type = 'button';
+      b.style.left = d.x + '%';
+      b.style.top = d.y + '%';
+      b.setAttribute('aria-label', d.title);
+      const dot = document.createElement('i');
+      const label = el('span', null, d.id === 'central' ? 'Central' : d.title.split(' ')[0]);
+      b.append(dot, label);
+      b.onclick = () => { if (stage.dataset.drag === '1') return; startDestination(d); };
+      host.append(b);
+    });
+    let scale = 1, tx = 0, ty = 0;
+    const pointers = new Map();
+    let pinch = 0;
+    function apply() {
+      world.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+    }
+    function clamp() {
+      const w = stage.clientWidth, h = stage.clientHeight;
+      const minX = Math.min(0, w - w * scale), minY = Math.min(0, h - h * scale);
+      tx = Math.max(minX, Math.min(0, tx));
+      ty = Math.max(minY, Math.min(0, ty));
+    }
+    function zoomAt(next) {
+      const prev = scale;
+      scale = Math.max(1, Math.min(3.2, next));
+      const w = stage.clientWidth, h = stage.clientHeight;
+      tx = (tx - w / 2) * (scale / prev) + w / 2;
+      ty = (ty - h / 2) * (scale / prev) + h / 2;
+      clamp(); apply();
+    }
+    $('zoomIn').onclick = () => zoomAt(scale * 1.25);
+    $('zoomOut').onclick = () => zoomAt(scale / 1.25);
+    $('zoomFit').onclick = () => { scale = 1; tx = 0; ty = 0; apply(); };
+    stage.addEventListener('pointerdown', e => {
+      if (e.target.closest('button')) { stage.dataset.drag = '0'; return; }
+      stage.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY });
+      stage.dataset.drag = '0';
+      if (pointers.size === 2) {
+        const pts = [...pointers.values()];
+        pinch = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      }
+    });
+    stage.addEventListener('pointermove', e => {
+      const prev = pointers.get(e.pointerId);
+      if (!prev) return;
+      if (Math.hypot(e.clientX - prev.ox, e.clientY - prev.oy) > 8) stage.dataset.drag = '1';
+      if (pointers.size === 1) { tx += e.clientX - prev.x; ty += e.clientY - prev.y; }
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, ox: prev.ox, oy: prev.oy });
+      if (pointers.size === 2) {
+        const pts = [...pointers.values()];
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        if (pinch) zoomAt(scale * (dist / pinch));
+        pinch = dist;
+      }
+      clamp(); apply();
+    });
+    const end = e => { pointers.delete(e.pointerId); if (pointers.size < 2) pinch = 0; };
+    stage.addEventListener('pointerup', end);
+    stage.addEventListener('pointercancel', end);
+    stage.addEventListener('wheel', e => { e.preventDefault(); zoomAt(scale * (e.deltaY > 0 ? 0.9 : 1.1)); }, { passive: false });
+    const goal = $('goalInput');
+    if (goal) {
+      goal.value = eng.p.goal || '';
+      goal.addEventListener('change', () => { eng.p.goal = goal.value.trim(); save(); });
+    }
+    if ($('progressHistory')) $('progressHistory').onclick = openHistory;
+    apply();
+  }
+  setupMap();
+  showWorld('map');
 
   buildSidebar();
   buildTeam();

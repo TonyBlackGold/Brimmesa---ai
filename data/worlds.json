@@ -1,12 +1,172 @@
 {
   "version": 1,
-  "coach": { "id": "coach", "name": "Coach Amara", "voice": { "pitch": 1.0, "rate": 1.0, "prefer": ["female", "Samantha", "Google US English"] } },
+  "coach": {
+    "id": "coach",
+    "name": "Coach Amara",
+    "voice": {
+      "pitch": 1,
+      "rate": 1,
+      "prefer": [
+        "female",
+        "Samantha",
+        "Google US English"
+      ]
+    }
+  },
   "worlds": [
-    { "id": "social", "title": "Social Confidence & Dating", "activities": [
-      { "id": "spice-aisle", "type": "scenario", "file": "data/scenarios/spice-aisle.json", "title": "Grocery spice aisle", "keywords": ["social", "grocery", "spice", "dating", "flirt", "women", "conversation scenario"], "driving": false } ] },
-    { "id": "communication", "title": "Communication Mastery", "activities": [
-      { "id": "interruptions", "type": "drill", "file": "data/drills/interruptions.json", "title": "Handling interruptions", "keywords": ["communication", "interrupt", "interruption", "composure", "meeting", "coaching"], "driving": true } ] },
-    { "id": "secplus", "title": "CompTIA Security+ Academy", "activities": [
-      { "id": "secplus-701", "type": "quiz", "file": "data/curricula/secplus-sy0-701.json", "title": "Security+ SY0-701 lesson", "keywords": ["security", "security plus", "security+", "comptia", "cyber", "cert", "exam", "quiz", "lesson"], "driving": true } ] }
+    {
+      "id": "social",
+      "title": "Social Confidence & Dating",
+      "activities": [
+        {
+          "id": "spice-aisle",
+          "type": "scenario",
+          "file": "data/scenarios/spice-aisle.json",
+          "title": "Grocery spice aisle",
+          "keywords": [
+            "social",
+            "grocery",
+            "spice",
+            "dating",
+            "flirt",
+            "women",
+            "conversation scenario"
+          ],
+          "driving": false
+        }
+      ]
+    },
+    {
+      "id": "communication",
+      "title": "Communication Mastery",
+      "activities": [
+        {
+          "id": "interruptions",
+          "type": "drill",
+          "file": "data/drills/interruptions.json",
+          "title": "Handling interruptions",
+          "keywords": [
+            "communication",
+            "interrupt",
+            "interruption",
+            "composure",
+            "meeting",
+            "coaching"
+          ],
+          "driving": true
+        }
+      ]
+    },
+    {
+      "id": "secplus",
+      "title": "CompTIA Security+ Academy",
+      "activities": [
+        {
+          "id": "secplus-701",
+          "type": "quiz",
+          "file": "data/curricula/secplus-sy0-701.json",
+          "title": "Security+ SY0-701 lesson",
+          "keywords": [
+            "security",
+            "security plus",
+            "security+",
+            "comptia",
+            "cyber",
+            "cert",
+            "exam",
+            "quiz",
+            "lesson"
+          ],
+          "driving": true
+        }
+      ]
+    },
+    {
+      "id": "gym",
+      "title": "Communication Gym",
+      "activities": [
+        {
+          "id": "wealth-pitch",
+          "type": "scenario",
+          "file": "data/scenarios/wealth-pitch.json",
+          "title": "Business pitch",
+          "keywords": [
+            "wealth pitch",
+            "business pitch",
+            "negotiate the deal"
+          ],
+          "driving": false
+        },
+        {
+          "id": "career-interview",
+          "type": "scenario",
+          "file": "data/scenarios/career-interview.json",
+          "title": "Job interview",
+          "keywords": [
+            "job interview",
+            "interview practice",
+            "interview"
+          ],
+          "driving": true
+        },
+        {
+          "id": "health-gym",
+          "type": "scenario",
+          "file": "data/scenarios/health-gym.json",
+          "title": "Gym conversation",
+          "keywords": [
+            "gym conversation",
+            "workout confidence"
+          ],
+          "driving": true
+        },
+        {
+          "id": "first-date",
+          "type": "scenario",
+          "file": "data/scenarios/first-date.json",
+          "title": "First date",
+          "keywords": [
+            "first date",
+            "date conversation"
+          ],
+          "driving": false
+        },
+        {
+          "id": "network-talk",
+          "type": "scenario",
+          "file": "data/scenarios/network-talk.json",
+          "title": "Networking small talk",
+          "keywords": [
+            "networking",
+            "small talk"
+          ],
+          "driving": false
+        },
+        {
+          "id": "goal-talk",
+          "type": "scenario",
+          "file": "data/scenarios/goal-talk.json",
+          "title": "Goal setting",
+          "keywords": [
+            "goal setting",
+            "self-talk",
+            "self talk"
+          ],
+          "driving": true
+        },
+        {
+          "id": "travel-order",
+          "type": "scenario",
+          "file": "data/scenarios/travel-order.json",
+          "title": "Ordering abroad",
+          "keywords": [
+            "ordering abroad",
+            "asking directions",
+            "travel practice"
+          ],
+          "driving": true
+        }
+      ]
+    }
   ]
 }

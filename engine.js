@@ -60,6 +60,7 @@
       const weak = this.weakest();
       const rec = weak ? ` I'd recommend ${weak.title.toLowerCase()}, since that's where you have the most room to grow.` : '';
       const drive = this.p.driving ? ' Driving mode is on, so I keep it short and audio-only. Save the social scenarios for when you are parked.' : '';
+      if (opts.length > 4) return this.C(`Pick a destination on the map, or name a practice.${rec}${drive}`);
       return this.C(`What would you like to practice: ${opts.join(', ')}?${rec}${drive}`);
     }
     weakest() {
@@ -211,7 +212,8 @@
       const pen = c.penalties.filter(p => hit[p.id]); pen.forEach(p => score -= p.points); score = Math.max(0, score);
       const good = c.rubric.filter(r => hit[r.id]).map(r => r.label.toLowerCase());
       const tips = pen.map(p => p.tip).concat(c.rubric.filter(r => !hit[r.id]).map(r => r.tip)).slice(0, 2);
-      return this.finish(c.skill, score, good, tips, 'the spice aisle scenario');
+      const label = c.feedbackLabel || 'the spice aisle scenario';
+      return this.finish(c.skill, score, good, tips, label);
     }
 
     drillTurn(text, t) {
@@ -277,9 +279,23 @@
       this.p.lastFeedback = fb; this.p.lastActivity = this.act.id;
       this.p.history.unshift({ t: this.now(), activity: this.act.title, score, xp: r.xp, summary: fb });
       this.p.history = this.p.history.slice(0, 50);
+      if (score >= 70 && this.act) {
+        this.p.missions = this.p.missions || {};
+        this.p.missions[this.act.id] = { score: score, t: this.now() };
+      }
+      const scene = this.act && this.content[this.act.id];
+      let dims = '';
+      if (scene && scene.dimensions && this.s && this.s.hit) {
+        const bits = scene.dimensions.map(d => {
+          const ids = d.signals || [];
+          const got = ids.filter(id => this.s.hit[id]).length;
+          return d.label + ' ' + Math.round(100 * got / Math.max(1, ids.length));
+        });
+        dims = ' Scores: ' + bits.join(', ') + '.';
+      }
       this.mode = 'menu'; this.act = null;
       const extra = (r.improved ? ' That beats your personal best, so you earn bonus XP!' : '') + (r.levelUp ? ` Level up! You're now level ${level(this.p.xp)}.` : '');
-      return [this.C(`Coach feedback on ${fb} You earned ${r.xp} XP.${extra}`), this.menuPrompt()];
+      return [this.C(`Coach feedback on ${fb}${dims} You earned ${r.xp} XP.${extra}`), this.menuPrompt()];
     }
     progressSummary() {
       const p = this.p, parts = Object.entries(p.mastery).filter(([, v]) => v.best !== undefined).map(([k, v]) => `${k} best ${v.best}`);
@@ -289,7 +305,7 @@
 
   const GEMINI_MODEL = 'gemini-3.5-flash-lite';
   const EMOTIONS = ['laugh', 'concern', 'smile', 'surprise'];
-  const SPEAKERS = { amara: 'coach', coach: 'coach', jasmine: 'jasmine', renee: 'renee', marcus: 'marcus' };
+  const SPEAKERS = { amara: 'coach', coach: 'coach', aria: 'aria', jasmine: 'jasmine', renee: 'renee', marcus: 'marcus' };
   const RATE_LINE = "Google's free tier is rate-limited right now. I'll use the practice script for this turn.";
   const ALLOWANCE_LINE = "That's today's free AI allowance. I'll keep going from the practice script until tomorrow.";
   const LINES_SCHEMA = {
@@ -392,7 +408,8 @@
       });
       const mem = (this.readMemory() || []).slice(-10).map(t => (t.role || 'coach') + ': ' + t.text).join('\n');
       const last = eng.p && eng.p.lastFeedback ? String(eng.p.lastFeedback).slice(0, 240) : '';
-      return 'Progress: ' + summary
+      const goal = eng.p && eng.p.goal ? '\nUser goal: ' + String(eng.p.goal).slice(0, 180) : '';
+      return 'Progress: ' + summary + goal
         + '\nStrengths: ' + (strengths.join(', ') || 'none yet')
         + '\nWorking on: ' + (working.join(', ') || 'none yet')
         + (last ? '\nLast feedback: ' + last : '')
@@ -513,6 +530,7 @@
     },
     async scenario(ctx, eng) {
       const preview = eng.advanceScenario(ctx.text, ctx.t);
+      const scene = eng.content[eng.act.id] || {};
       if ((preview.found || []).indexOf('pushy') >= 0) {
         const tail = preview.ended ? eng.endScenario() : [];
         return preview.npc.concat(tail);
@@ -521,22 +539,23 @@
       let npc = preview.npc;
       let limited = false;
       let talked = false;
+      const allowed = (scene.characters || []).map(ch => ch.id).filter(id => SPEAKERS[id]);
+      const castIds = allowed.length ? allowed : ['jasmine', 'renee'];
       try {
         const prompt = [
-          'Adults only. This is a respectful coaching scene in a grocery spice aisle. No sexual content, no pressure, no appearance ratings, no contact details, no private meetups.',
-          'If the user is pushy, Jasmine and Renee set a short boundary and stop the chat.',
-          'Two distinct adult speakers. Do not speak as the coach or the user.',
-          this.persona('jasmine'),
-          this.persona('renee'),
-          'Scene: ' + ((eng.content[eng.act.id] || {}).setting || ''),
+          scene.sceneNote || 'Adults only. This is a respectful coaching scene in a grocery spice aisle. No sexual content, no pressure, no appearance ratings, no contact details, no private meetups.',
+          'If the user is pushy, the characters set a short boundary and stop the chat.',
+          'Do not speak as the user. Speak only as: ' + castIds.join(', ') + '.',
+          castIds.map(id => this.persona(id)).join('\n'),
+          'Scene: ' + (scene.setting || ''),
           this.lengthRule(eng),
-          'Return JSON {"lines":[{"speaker":"jasmine","text":"...","emotion":"smile"}]} or renee. emotion is smile, concern, laugh, or surprise. One to three lines, each one speaker.',
+          'Return JSON {"lines":[{"speaker":"' + castIds[0] + '","text":"...","emotion":"smile"}]}. emotion is smile, concern, laugh, or surprise. One to three lines, each one speaker.',
           this.areaContext(eng),
           this.progressBlock(eng),
           'User said: ' + ctx.text
         ].join('\n');
         const text = await this.generate(prompt, LINES_SCHEMA);
-        const lines = this.normalizeLines(this.parseJSON(text), ['jasmine', 'renee'], driving);
+        const lines = this.normalizeLines(this.parseJSON(text), castIds, driving);
         if (lines.length) { npc = lines; talked = true; }
       } catch (e) {
         npc = preview.npc;
@@ -544,9 +563,10 @@
       }
       let tail = [];
       if (preview.ended) {
-        const c = eng.content[eng.act.id];
+        const c = scene;
         const scored = limited ? null : await this.scoreScenario(ctx, eng, preview);
-        if (scored) tail = eng.finish(c.skill, scored.score, scored.strengths, scored.tips, 'the spice aisle scenario');
+        const label = c.feedbackLabel || 'the spice aisle scenario';
+        if (scored) tail = eng.finish(c.skill, scored.score, scored.strengths, scored.tips, label);
         else tail = eng.endScenario();
       }
       const spoken = (limited ? [{ speaker: 'coach', text: RATE_LINE }] : []).concat(npc, tail);
@@ -683,6 +703,12 @@
     } };
   }
 
-  const api = { Engine, newProfile, level, awardXP, touchStreak, ScriptedProvider, LLMProvider, createLLMProvider, makeHttpProvider };
+  // Slots only. Realistic avatar and HeyGen are not built. ElevenLabs already speaks when a key is saved on the device.
+  const futureHooks = {
+    realisticAvatar: { implemented: false },
+    heygen: { implemented: false }
+  };
+
+  const api = { Engine, newProfile, level, awardXP, touchStreak, ScriptedProvider, LLMProvider, createLLMProvider, makeHttpProvider, futureHooks };
   if (typeof module !== 'undefined') module.exports = api; else root.BrimEngine = api;
 })(this);

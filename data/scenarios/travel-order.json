@@ -1,0 +1,243 @@
+{
+  "id": "travel-order",
+  "skill": "travel.order",
+  "feedbackLabel": "the travel conversation",
+  "setting": "You are in a cafe abroad. Aria is the person at the counter. Order something simple, ask one question about the place or how to get to the station, and thank her.",
+  "sceneNote": "Adults only. Respectful practice. No sexual content, no pressure, no appearance ratings, no contact details, no private meetups. Aria works at a cafe in another city. She speaks clear English. Helpful, not a tour guide speech.",
+  "characters": [
+    {
+      "id": "aria",
+      "name": "Aria",
+      "trait": "warm, encouraging, specific",
+      "voice": {
+        "pitch": 1.05,
+        "rate": 1,
+        "index": 1
+      }
+    }
+  ],
+  "maxTurns": 4,
+  "signals": {
+    "greeting": [
+      "hi",
+      "hello",
+      "hey",
+      "good morning",
+      "good afternoon"
+    ],
+    "context": [
+      "coffee",
+      "tea",
+      "order",
+      "station",
+      "street",
+      "left",
+      "right",
+      "menu",
+      "please",
+      "table",
+      "train",
+      "map"
+    ],
+    "question": [
+      "?",
+      "what",
+      "how",
+      "which",
+      "could you",
+      "can you",
+      "would you",
+      "do you"
+    ],
+    "intro": [
+      "i'm ",
+      "i am ",
+      "my name",
+      "i work",
+      "i help",
+      "i train",
+      "i run"
+    ],
+    "humor": [
+      "haha",
+      "honestly",
+      "funny",
+      "luckily",
+      "between us",
+      "fair warning"
+    ],
+    "inclusive": [
+      "how about you",
+      "what do you think",
+      "your team",
+      "together",
+      "what about you",
+      "and you"
+    ],
+    "pushy": [
+      "your number",
+      "phone number",
+      "sexy",
+      "you're hot",
+      "you are hot",
+      "come on",
+      "you have to",
+      "right now or"
+    ],
+    "exit": [
+      "nice meeting",
+      "thank you",
+      "thanks",
+      "goodbye",
+      "bye",
+      "have a good",
+      "next step",
+      "talk soon",
+      "see you"
+    ]
+  },
+  "responses": {
+    "open_good": [
+      {
+        "speaker": "aria",
+        "text": "Hello. What can I get you?"
+      }
+    ],
+    "open_flat": [
+      {
+        "speaker": "aria",
+        "text": "Hi. Point to the menu if the words are hard. I can help."
+      }
+    ],
+    "context": [
+      {
+        "speaker": "aria",
+        "text": "The station is a short walk. Order first, then I will point you."
+      }
+    ],
+    "question": [
+      {
+        "speaker": "aria",
+        "text": "Good question. Leave here, go left, and the station is past the second square."
+      }
+    ],
+    "humor": [
+      {
+        "speaker": "aria",
+        "text": "You are doing fine. Everyone asks the station question."
+      }
+    ],
+    "intro": [
+      {
+        "speaker": "aria",
+        "text": "Welcome. I am Aria. Take your time with the order."
+      }
+    ],
+    "inclusive": [
+      {
+        "speaker": "aria",
+        "text": "Thank you for asking so clearly. People rush this part."
+      }
+    ],
+    "pushy": [
+      {
+        "speaker": "aria",
+        "text": "I can help with the order and the directions. I cannot do more than that."
+      }
+    ],
+    "neutral": [
+      {
+        "speaker": "aria",
+        "text": "Try the order in one sentence, then the question."
+      }
+    ],
+    "exit": [
+      {
+        "speaker": "aria",
+        "text": "You are welcome. Enjoy it, and the station is to the left."
+      }
+    ],
+    "timeout": [
+      {
+        "speaker": "aria",
+        "text": "Here is your order. Ask for the station whenever you are ready."
+      }
+    ]
+  },
+  "rubric": [
+    {
+      "id": "greeting",
+      "label": "Clear opener",
+      "points": 15,
+      "tip": "Start with a calm hello and your point."
+    },
+    {
+      "id": "context",
+      "label": "Used the real situation",
+      "points": 20,
+      "tip": "Name the thing in front of you, not a generic line."
+    },
+    {
+      "id": "question",
+      "label": "Asked a real question",
+      "points": 20,
+      "tip": "Ask one open question so they can answer."
+    },
+    {
+      "id": "intro",
+      "label": "Said who you are",
+      "points": 10,
+      "tip": "One short line about who you are is enough."
+    },
+    {
+      "id": "humor",
+      "label": "Easy tone",
+      "points": 10,
+      "tip": "A little warmth beats a stiff speech."
+    },
+    {
+      "id": "inclusive",
+      "label": "Left room for them",
+      "points": 10,
+      "tip": "Invite their view instead of talking over them."
+    },
+    {
+      "id": "exit",
+      "label": "Clean close",
+      "points": 15,
+      "tip": "End with thanks and a next step."
+    }
+  ],
+  "penalties": [
+    {
+      "id": "pushy",
+      "label": "Pushy or personal remark",
+      "points": 30,
+      "tip": "Drop pressure. Stay on the topic and their comfort."
+    }
+  ],
+  "dimensions": [
+    {
+      "label": "Clarity",
+      "signals": [
+        "question",
+        "context"
+      ]
+    },
+    {
+      "label": "Confidence",
+      "signals": [
+        "greeting",
+        "exit",
+        "humor"
+      ]
+    },
+    {
+      "label": "Warmth",
+      "signals": [
+        "inclusive",
+        "intro"
+      ]
+    }
+  ]
+}

@@ -2,6 +2,25 @@
   "version": 1,
   "characters": [
     {
+      "id": "aria",
+      "name": "Aria",
+      "role": "Main guide",
+      "personality": "Warm and encouraging. She remembers the goal you named and walks you from one destination to the next.",
+      "portrait": "assets/aria.webp",
+      "speakerId": "aria",
+      "voiceId": null,
+      "memory": null,
+      "avatarModel": null,
+      "body": "F",
+      "gestureRate": 0.4,
+      "expressiveness": 0.55,
+      "mannerisms": ["open hands", "steady smile"],
+      "voice": { "pitch": 1.05, "rate": 1.0, "prefer": ["Google US English", "Natural", "Neural", "female"], "geminiVoice": "Kore", "style": "warm and encouraging", "elevenVoice": "21m00Tcm4TlvDq8ikWAM", "elevenName": "Rachel" },
+      "activityId": null,
+      "areaId": null,
+      "practice": "Map guide"
+    },
+    {
       "id": "amara",
       "name": "Coach Amara",
       "role": "Mindset & Life Coaching",

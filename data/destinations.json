@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "title": "Communication Gym for Real Life",
+  "image": "assets/world-map.webp",
+  "imageMobile": "assets/world-map-mobile.webp",
+  "destinations": [
+    {
+      "id": "wealth",
+      "title": "Wealth & Business",
+      "x": 27,
+      "y": 24,
+      "activityId": "wealth-pitch",
+      "blurb": "Pitch an offer and ask for the next step."
+    },
+    {
+      "id": "mindset",
+      "title": "Mindset & Purpose",
+      "x": 44,
+      "y": 16,
+      "activityId": "goal-talk",
+      "blurb": "Say one goal and the next rep."
+    },
+    {
+      "id": "career",
+      "title": "Career & Professional Development",
+      "x": 50,
+      "y": 40,
+      "activityId": "career-interview",
+      "blurb": "Answer a job interview out loud."
+    },
+    {
+      "id": "skills",
+      "title": "Skills & Education",
+      "x": 36,
+      "y": 48,
+      "activityId": "secplus-701",
+      "blurb": "Security+ questions, spoken."
+    },
+    {
+      "id": "health",
+      "title": "Health & Fitness",
+      "x": 76,
+      "y": 24,
+      "activityId": "health-gym",
+      "blurb": "A calm conversation at the gym."
+    },
+    {
+      "id": "central",
+      "title": "Brimmesa Central",
+      "x": 58,
+      "y": 52,
+      "activityId": null,
+      "blurb": "Aria welcomes you and points the way."
+    },
+    {
+      "id": "relationships",
+      "title": "Relationships & Dating",
+      "x": 28,
+      "y": 70,
+      "activityId": "first-date",
+      "blurb": "A first coffee, warm and unhurried."
+    },
+    {
+      "id": "lifestyle",
+      "title": "Lifestyle & Social Skills",
+      "x": 46,
+      "y": 76,
+      "activityId": "network-talk",
+      "blurb": "Small talk that respects their time."
+    },
+    {
+      "id": "travel",
+      "title": "Travel & Experiences",
+      "x": 74,
+      "y": 72,
+      "activityId": "travel-order",
+      "blurb": "Order something and ask the way."
+    }
+  ]
+}

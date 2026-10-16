@@ -285,8 +285,9 @@ button.ghost {
   background: rgba(8, 9, 12, .94); border-top: 1px solid var(--line);
   padding: 6px 8px calc(8px + env(safe-area-inset-bottom));
 }
-.bottomnav button { flex: 1; background: transparent; border: 0; color: var(--muted); font-size: 11px; min-height: 48px; }
+.bottomnav button { flex: 1; background: transparent; border: 0; color: var(--muted); font-size: 10px; min-height: 48px; letter-spacing: .02em; }
 .bottomnav button.on { color: var(--gold-2); }
+.bottomnav button[disabled] { display: none; }
 .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 35; }
 @media (max-width: 720px) {
   header.top { flex-wrap: wrap; align-items: flex-start; row-gap: 8px; }
@@ -310,7 +311,8 @@ button.ghost {
 }
 @media (min-width: 1080px) {
   .app { padding: 16px 20px 28px; }
-  .menu-btn, .bottomnav, .scrim { display: none !important; }
+  .menu-btn, .scrim { display: none !important; }
+  body[data-view="home"] .bottomnav { display: none !important; }
   .shell { display: grid; grid-template-columns: 272px minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
   .side { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; display: flex; flex-direction: column; }
   .side nav { flex: 1; }
@@ -320,6 +322,77 @@ button.ghost {
   .team-card { flex: none; }
   .suggest-row { display: grid; grid-template-columns: 1fr 1fr; }
   .suggest { min-width: 0; }
+}
+.app { padding-bottom: 128px; }
+.world-layout, .view-panel { margin-bottom: 8px; }
+.map-tools { display: flex; gap: 8px; margin-bottom: 8px; }
+.map-tools button, .mission-card .gold, .view-panel .gold {
+  min-height: 40px; border-radius: 999px; border: 1px solid var(--line); background: #14120c; color: var(--gold-2); padding: 0 14px;
+}
+.map-stage {
+  position: relative; width: 100%; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 22px;
+  border: 1px solid var(--line); background: #07080c; touch-action: none;
+}
+.map-world { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; }
+.map-world img { width: 100%; height: 100%; object-fit: fill; display: block; user-select: none; -webkit-user-drag: none; }
+#hotspots { position: absolute; inset: 0; }
+.hotspot {
+  position: absolute; transform: translate(-50%, -50%); min-width: 44px; min-height: 44px;
+  border: 0; background: transparent; color: #fff8e8; padding: 0;
+}
+.hotspot i {
+  display: block; width: 16px; height: 16px; margin: 14px auto 0; border-radius: 50%;
+  background: #f3d48a; box-shadow: 0 0 0 6px rgba(224, 182, 90, .35), 0 0 18px #e0b65a;
+  animation: pulse 1.8s ease-in-out infinite;
+}
+.hotspot span {
+  position: absolute; left: 50%; top: 38px; transform: translateX(-50%);
+  font-size: 10px; letter-spacing: .04em; white-space: nowrap;
+  background: rgba(8, 7, 5, .82); border: 1px solid rgba(224, 182, 90, .7); border-radius: 999px; padding: 2px 6px;
+}
+@keyframes pulse { 50% { box-shadow: 0 0 0 10px rgba(224, 182, 90, .15), 0 0 22px #f3d48a; } }
+.mission-card, .aria-card, .view-panel {
+  margin-top: 12px; padding: 12px; border-radius: 18px; border: 1px solid var(--line); background: #12141a;
+}
+.mission-card h2, .view-panel h2 { font-family: var(--serif); margin: 0 0 6px; font-size: 22px; }
+.aria-card { display: flex; gap: 10px; align-items: flex-start; }
+.aria-card img { width: 84px; height: 108px; object-fit: cover; object-position: center 20%; border-radius: 14px; border: 1px solid var(--line); }
+.goal { display: block; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.goal input {
+  display: block; width: 100%; margin-top: 4px; min-height: 40px; border-radius: 10px;
+  border: 1px solid var(--line); background: #0e1014; color: var(--ink); padding: 8px;
+}
+.comic { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.panel {
+  border: 3px solid #241c10; background: #f6f0e4; color: #1b140c; border-radius: 14px; padding: 10px 12px;
+  box-shadow: 4px 4px 0 #3a2e18;
+}
+.panel .who { margin: 0 0 4px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; }
+.panel p { margin: 0; line-height: 1.35; }
+.panel.user { background: #16130e; color: #f7f1e6; margin-left: 12%; box-shadow: 4px 4px 0 #8d6428; }
+.panel.aria, .panel.coach { margin-right: 8%; }
+.panel.feedback { background: #fff8df; }
+.view-panel[hidden] { display: none !important; }
+.list-card { display: block; width: 100%; text-align: left; margin: 8px 0; padding: 12px; border-radius: 16px; border: 1px solid var(--line); background: #101218; color: inherit; }
+.list-card small { display: block; color: var(--muted); margin-top: 4px; }
+.coach-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.coach-grid button { text-align: left; }
+.coach-grid img { width: 100%; height: 120px; object-fit: cover; border-radius: 12px; }
+.mic-dock { margin-top: 8px; }
+body[data-view="map"] .shell,
+body[data-view="missions"] .shell,
+body[data-view="coaches"] .shell,
+body[data-view="scenarios"] .shell,
+body[data-view="progress"] .shell,
+body[data-view="map"] .timeline,
+body[data-view="missions"] .timeline,
+body[data-view="coaches"] .timeline,
+body[data-view="scenarios"] .timeline,
+body[data-view="progress"] .timeline { display: none !important; }
+body[data-view="area"] #worldApp { display: none; }
+@media (orientation: landscape) and (min-width: 800px) {
+  .world-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(260px, .75fr); gap: 12px; align-items: start; }
+  .mission-card { margin-top: 8px; }
 }
 dialog { border: 1px solid var(--line); border-radius: 18px; background: #12141a; color: var(--ink); width: min(560px, 94vw); max-height: min(90vh, 820px); overflow: auto; }
 #settingsDlg h4 { font-family: var(--serif); font-size: 18px; margin: 14px 0 6px; }
@@ -349,7 +422,7 @@ input[type=checkbox] { width: 22px; height: 22px; }
 }
 </style>
 </head>
-<body data-view="home" data-voice="idle">
+<body data-view="map" data-voice="idle">
 <div class="app">
   <header class="top">
     <div class="brand">
@@ -359,7 +432,7 @@ input[type=checkbox] { width: 22px; height: 22px; }
       <svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><path fill="#e0b65a" d="M32 6c2 8 6 12 14 14-8 2-12 6-14 14-2-8-6-12-14-14 8-2 12-6 14-14z"/><path fill="#f3d48a" d="M32 28c1 4 3 6 7 7-4 1-6 3-7 7-1-4-3-6-7-7 4-1 6-3 7-7z"/></svg>
       <div>
         <h1>BRIMMESA AI</h1>
-        <small>LOOK GOOD. FEEL INCREDIBLE.</small>
+        <small>COMMUNICATION GYM FOR REAL LIFE</small>
       </div>
     </div>
     <div class="header-right">
@@ -375,6 +448,63 @@ input[type=checkbox] { width: 22px; height: 22px; }
       <button class="icon-btn" id="settingsBtn" type="button" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg></button>
     </div>
   </header>
+
+  <div id="worldApp">
+    <section id="viewMap" class="world-layout">
+      <div>
+        <div class="map-tools">
+          <button type="button" id="zoomOut" aria-label="Zoom out">−</button>
+          <button type="button" id="zoomIn" aria-label="Zoom in">+</button>
+          <button type="button" id="zoomFit">Fit</button>
+        </div>
+        <div class="map-stage" id="mapStage">
+          <div class="map-world" id="mapWorld">
+            <picture>
+              <source media="(max-width: 720px)" srcset="assets/world-map-mobile.webp">
+              <img id="mapImg" src="assets/world-map.webp" alt="Illustrated map of the Brimmesa world, with Aria and eight destinations" width="1448" height="1086">
+            </picture>
+            <div id="hotspots"></div>
+          </div>
+        </div>
+        <article class="mission-card" id="missionCard">
+          <p class="kicker">Current mission</p>
+          <h2 id="missionTitle">Choose a destination</h2>
+          <p id="missionText">Tap a glowing stop. Aria will start the spoken practice.</p>
+          <button class="gold" id="missionGo" type="button">Start</button>
+        </article>
+      </div>
+      <div class="guide-col">
+        <article class="aria-card">
+          <img src="assets/aria.webp" alt="Aria, the guide, cropped from the world map">
+          <div>
+            <p class="kicker">Aria</p>
+            <p id="ariaLine">Pick a glowing stop. We will practice it out loud.</p>
+            <label class="goal">Your goal<input id="goalInput" maxlength="180" placeholder="What are you working toward?"></label>
+          </div>
+        </article>
+        <div id="comic" class="comic" aria-live="polite"></div>
+      </div>
+    </section>
+    <section id="viewMissions" class="view-panel" hidden>
+      <h2>Missions</h2>
+      <div id="missionList"></div>
+    </section>
+    <section id="viewCoaches" class="view-panel" hidden>
+      <h2>Coaches</h2>
+      <p class="sub">Aria guides the map. Amara, Jasmine, Renee, and Marcus stay on the team.</p>
+      <div class="coach-grid" id="coachGrid"></div>
+    </section>
+    <section id="viewScenarios" class="view-panel" hidden>
+      <h2>Scenarios</h2>
+      <div id="scenarioList"></div>
+    </section>
+    <section id="viewProgress" class="view-panel" hidden>
+      <h2>Progress</h2>
+      <p id="progressLead"></p>
+      <div id="progressList"></div>
+      <button class="gold" id="progressHistory" type="button">Full history</button>
+    </section>
+  </div>
 
   <div class="scrim" id="scrim"></div>
   <div class="shell">
@@ -422,25 +552,6 @@ input[type=checkbox] { width: 22px; height: 22px; }
           <ul class="soon-list" id="areaComing"></ul>
           <p><button class="ghost" id="areaBack" type="button">Back to Amara</button></p>
         </section>
-        <div class="mic-row">
-          <button class="flank" id="typeBtn" type="button"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg></span>Type instead</button>
-          <div class="mic-wrap">
-            <div class="mic-core">
-              <span class="waves" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-              <button id="mic" type="button" aria-label="Tap to talk"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V7a3 3 0 0 0-6 0v4a3 3 0 0 0 3 3z"/><path d="M7 11a5 5 0 0 0 10 0h2a7 7 0 0 1-6 6.9V21h-2v-3.1A7 7 0 0 1 5 11h2z"/></svg></button>
-              <span class="waves" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-            </div>
-            <p id="micLabel">Tap to Talk</p>
-            <p class="hint">Press, speak, and I'll respond.</p>
-          </div>
-          <button class="flank" id="viewBtn" type="button"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 6h14v9H8l-3 3V6z"/></svg></span>View conversation</button>
-        </div>
-        <p id="driveNote" hidden>Driving mode is on. Social scenes wait until you are parked.</p>
-        <p id="note"></p>
-        <form id="typeRow" hidden>
-          <input id="txt" autocomplete="off" placeholder="Type to Amara, then press Enter">
-          <button type="submit">Send</button>
-        </form>
       </section>
     </div>
 
@@ -482,11 +593,36 @@ input[type=checkbox] { width: 22px; height: 22px; }
   </section>
 </div>
 
+<div class="mic-dock">
+  <div class="mic-row">
+    <button class="flank" id="typeBtn" type="button"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg></span>Type instead</button>
+    <div class="mic-wrap">
+      <div class="mic-core">
+        <span class="waves" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+        <button id="mic" type="button" aria-label="Tap to talk"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V7a3 3 0 0 0-6 0v4a3 3 0 0 0 3 3z"/><path d="M7 11a5 5 0 0 0 10 0h2a7 7 0 0 1-6 6.9V21h-2v-3.1A7 7 0 0 1 5 11h2z"/></svg></button>
+        <span class="waves" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+      </div>
+      <p id="micLabel">Tap to Talk</p>
+      <p class="hint">Press, speak, and I'll respond.</p>
+    </div>
+    <button class="flank" id="viewBtn" type="button"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 6h14v9H8l-3 3V6z"/></svg></span>View conversation</button>
+  </div>
+  <p id="driveNote" hidden>Driving mode is on. Social scenes wait until you are parked.</p>
+  <p id="note"></p>
+  <form id="typeRow" hidden>
+    <input id="txt" autocomplete="off" placeholder="Type, then press Enter">
+    <button type="submit">Send</button>
+  </form>
+</div>
+
 <nav class="bottomnav" aria-label="Primary">
-  <button type="button" id="tabHome" class="on">Home</button>
-  <button type="button" id="tabMap">Roadmap</button>
-  <button type="button" id="tabTeam">Team</button>
-  <button type="button" id="tabJourney">Journey</button>
+  <button type="button" id="tabMap" class="on">Map</button>
+  <button type="button" id="tabMissions">Missions</button>
+  <button type="button" id="tabCoaches">Coaches</button>
+  <button type="button" id="tabScenarios">Scenarios</button>
+  <button type="button" id="tabProgress">Progress</button>
+  <button type="button" id="tabSettings">Settings</button>
+  <button type="button" id="tabShop" disabled hidden>Shop</button>
 </nav>
 
 <dialog id="convo">

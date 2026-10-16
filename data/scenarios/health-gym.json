@@ -1,0 +1,241 @@
+{
+  "id": "health-gym",
+  "skill": "health.gym",
+  "feedbackLabel": "the gym conversation",
+  "setting": "You are at a gym between sets. Aria is training nearby. Ask to share the equipment, or start a short, respectful conversation about the workout. Keep it light.",
+  "sceneNote": "Adults only. Respectful practice. No sexual content, no pressure, no appearance ratings, no contact details, no private meetups. Aria is another adult at the gym. Friendly, not a date. No comments about bodies.",
+  "characters": [
+    {
+      "id": "aria",
+      "name": "Aria",
+      "trait": "warm, encouraging, specific",
+      "voice": {
+        "pitch": 1.05,
+        "rate": 1,
+        "index": 1
+      }
+    }
+  ],
+  "maxTurns": 4,
+  "signals": {
+    "greeting": [
+      "hi",
+      "hello",
+      "hey",
+      "good morning",
+      "good afternoon"
+    ],
+    "context": [
+      "set",
+      "rack",
+      "workout",
+      "training",
+      "gym",
+      "rest",
+      "form",
+      "program",
+      "squat",
+      "cardio"
+    ],
+    "question": [
+      "?",
+      "what",
+      "how",
+      "which",
+      "could you",
+      "can you",
+      "would you",
+      "do you"
+    ],
+    "intro": [
+      "i'm ",
+      "i am ",
+      "my name",
+      "i work",
+      "i help",
+      "i train",
+      "i run"
+    ],
+    "humor": [
+      "haha",
+      "honestly",
+      "funny",
+      "luckily",
+      "between us",
+      "fair warning"
+    ],
+    "inclusive": [
+      "how about you",
+      "what do you think",
+      "your team",
+      "together",
+      "what about you",
+      "and you"
+    ],
+    "pushy": [
+      "your number",
+      "phone number",
+      "sexy",
+      "you're hot",
+      "you are hot",
+      "come on",
+      "you have to",
+      "right now or"
+    ],
+    "exit": [
+      "nice meeting",
+      "thank you",
+      "thanks",
+      "goodbye",
+      "bye",
+      "have a good",
+      "next step",
+      "talk soon",
+      "see you"
+    ]
+  },
+  "responses": {
+    "open_good": [
+      {
+        "speaker": "aria",
+        "text": "Hey. I have one set left. Want to work in?"
+      }
+    ],
+    "open_flat": [
+      {
+        "speaker": "aria",
+        "text": "Hi. Did you need the rack, or were you saying hello?"
+      }
+    ],
+    "context": [
+      {
+        "speaker": "aria",
+        "text": "Same program problem. I keep the rests honest or the last sets fall apart."
+      }
+    ],
+    "question": [
+      {
+        "speaker": "aria",
+        "text": "I like that question. I am just trying to leave stronger than I arrived. You?"
+      }
+    ],
+    "humor": [
+      {
+        "speaker": "aria",
+        "text": "Ha. Yes. Confidence in here is mostly just showing up again."
+      }
+    ],
+    "intro": [
+      {
+        "speaker": "aria",
+        "text": "Nice to meet you. I am Aria. I train early so the rest of the day stays mine."
+      }
+    ],
+    "inclusive": [
+      {
+        "speaker": "aria",
+        "text": "Thanks for asking instead of hovering. The rack is yours after this set."
+      }
+    ],
+    "pushy": [
+      {
+        "speaker": "aria",
+        "text": "That is not a gym conversation I want. I am going back to my set."
+      }
+    ],
+    "neutral": [
+      {
+        "speaker": "aria",
+        "text": "All good. A simple hello works in here."
+      }
+    ],
+    "exit": [
+      {
+        "speaker": "aria",
+        "text": "Nice talking. Have a good session. I will leave the rack how I found it."
+      }
+    ],
+    "timeout": [
+      {
+        "speaker": "aria",
+        "text": "I should finish this set. Good luck with the workout."
+      }
+    ]
+  },
+  "rubric": [
+    {
+      "id": "greeting",
+      "label": "Clear opener",
+      "points": 15,
+      "tip": "Start with a calm hello and your point."
+    },
+    {
+      "id": "context",
+      "label": "Used the real situation",
+      "points": 20,
+      "tip": "Name the thing in front of you, not a generic line."
+    },
+    {
+      "id": "question",
+      "label": "Asked a real question",
+      "points": 20,
+      "tip": "Ask one open question so they can answer."
+    },
+    {
+      "id": "intro",
+      "label": "Said who you are",
+      "points": 10,
+      "tip": "One short line about who you are is enough."
+    },
+    {
+      "id": "humor",
+      "label": "Easy tone",
+      "points": 10,
+      "tip": "A little warmth beats a stiff speech."
+    },
+    {
+      "id": "inclusive",
+      "label": "Left room for them",
+      "points": 10,
+      "tip": "Invite their view instead of talking over them."
+    },
+    {
+      "id": "exit",
+      "label": "Clean close",
+      "points": 15,
+      "tip": "End with thanks and a next step."
+    }
+  ],
+  "penalties": [
+    {
+      "id": "pushy",
+      "label": "Pushy or personal remark",
+      "points": 30,
+      "tip": "Drop pressure. Stay on the topic and their comfort."
+    }
+  ],
+  "dimensions": [
+    {
+      "label": "Clarity",
+      "signals": [
+        "question",
+        "context"
+      ]
+    },
+    {
+      "label": "Confidence",
+      "signals": [
+        "greeting",
+        "exit",
+        "humor"
+      ]
+    },
+    {
+      "label": "Warmth",
+      "signals": [
+        "inclusive",
+        "intro"
+      ]
+    }
+  ]
+}

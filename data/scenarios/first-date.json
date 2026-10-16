@@ -1,0 +1,240 @@
+{
+  "id": "first-date",
+  "skill": "relationships.date",
+  "feedbackLabel": "the first date",
+  "setting": "You are on a first coffee with Jasmine. She chose the place. Be warm, ask about her, and share one real thing about you. No lines, no pressure.",
+  "sceneNote": "Adults only. Respectful practice. No sexual content, no pressure, no appearance ratings, no contact details, no private meetups. Jasmine is on a first coffee. She is warm and will end the chat if you push.",
+  "characters": [
+    {
+      "id": "jasmine",
+      "name": "Jasmine",
+      "trait": "warm and curious",
+      "voice": {
+        "pitch": 1.2,
+        "rate": 1.02,
+        "index": 1
+      }
+    }
+  ],
+  "maxTurns": 4,
+  "signals": {
+    "greeting": [
+      "hi",
+      "hello",
+      "hey",
+      "good morning",
+      "good afternoon"
+    ],
+    "context": [
+      "coffee",
+      "place",
+      "weekend",
+      "work",
+      "music",
+      "food",
+      "city",
+      "story",
+      "date"
+    ],
+    "question": [
+      "?",
+      "what",
+      "how",
+      "which",
+      "could you",
+      "can you",
+      "would you",
+      "do you"
+    ],
+    "intro": [
+      "i'm ",
+      "i am ",
+      "my name",
+      "i work",
+      "i help",
+      "i train",
+      "i run"
+    ],
+    "humor": [
+      "haha",
+      "honestly",
+      "funny",
+      "luckily",
+      "between us",
+      "fair warning"
+    ],
+    "inclusive": [
+      "how about you",
+      "what do you think",
+      "your team",
+      "together",
+      "what about you",
+      "and you"
+    ],
+    "pushy": [
+      "your number",
+      "phone number",
+      "sexy",
+      "you're hot",
+      "you are hot",
+      "come on",
+      "you have to",
+      "right now or"
+    ],
+    "exit": [
+      "nice meeting",
+      "thank you",
+      "thanks",
+      "goodbye",
+      "bye",
+      "have a good",
+      "next step",
+      "talk soon",
+      "see you"
+    ]
+  },
+  "responses": {
+    "open_good": [
+      {
+        "speaker": "jasmine",
+        "text": "Hi. I am glad we picked this place. What made you say yes to coffee?"
+      }
+    ],
+    "open_flat": [
+      {
+        "speaker": "jasmine",
+        "text": "Hey. Tell me something true, not a highlight reel."
+      }
+    ],
+    "context": [
+      {
+        "speaker": "jasmine",
+        "text": "Okay, I like that detail. I come here when I want a quiet hour."
+      }
+    ],
+    "question": [
+      {
+        "speaker": "jasmine",
+        "text": "Good question. I am figuring out a move at work, and I wanted a conversation that was not about that."
+      }
+    ],
+    "humor": [
+      {
+        "speaker": "jasmine",
+        "text": "Ha. That is the right kind of honest. I can work with that."
+      }
+    ],
+    "intro": [
+      {
+        "speaker": "jasmine",
+        "text": "Nice to actually meet you. I am Jasmine. What should I know that a profile would miss?"
+      }
+    ],
+    "inclusive": [
+      {
+        "speaker": "jasmine",
+        "text": "I noticed you asked, then left space. That is rare and welcome."
+      }
+    ],
+    "pushy": [
+      {
+        "speaker": "jasmine",
+        "text": "That is too fast for me. I am going to head out."
+      }
+    ],
+    "neutral": [
+      {
+        "speaker": "jasmine",
+        "text": "Tell me a little more. I am still here."
+      }
+    ],
+    "exit": [
+      {
+        "speaker": "jasmine",
+        "text": "This was easy. Thank you. If you want a second coffee, say so plainly."
+      }
+    ],
+    "timeout": [
+      {
+        "speaker": "jasmine",
+        "text": "I should get going. This was a good first conversation."
+      }
+    ]
+  },
+  "rubric": [
+    {
+      "id": "greeting",
+      "label": "Clear opener",
+      "points": 15,
+      "tip": "Start with a calm hello and your point."
+    },
+    {
+      "id": "context",
+      "label": "Used the real situation",
+      "points": 20,
+      "tip": "Name the thing in front of you, not a generic line."
+    },
+    {
+      "id": "question",
+      "label": "Asked a real question",
+      "points": 20,
+      "tip": "Ask one open question so they can answer."
+    },
+    {
+      "id": "intro",
+      "label": "Said who you are",
+      "points": 10,
+      "tip": "One short line about who you are is enough."
+    },
+    {
+      "id": "humor",
+      "label": "Easy tone",
+      "points": 10,
+      "tip": "A little warmth beats a stiff speech."
+    },
+    {
+      "id": "inclusive",
+      "label": "Left room for them",
+      "points": 10,
+      "tip": "Invite their view instead of talking over them."
+    },
+    {
+      "id": "exit",
+      "label": "Clean close",
+      "points": 15,
+      "tip": "End with thanks and a next step."
+    }
+  ],
+  "penalties": [
+    {
+      "id": "pushy",
+      "label": "Pushy or personal remark",
+      "points": 30,
+      "tip": "Drop pressure. Stay on the topic and their comfort."
+    }
+  ],
+  "dimensions": [
+    {
+      "label": "Clarity",
+      "signals": [
+        "question",
+        "context"
+      ]
+    },
+    {
+      "label": "Confidence",
+      "signals": [
+        "greeting",
+        "exit",
+        "humor"
+      ]
+    },
+    {
+      "label": "Warmth",
+      "signals": [
+        "inclusive",
+        "intro"
+      ]
+    }
+  ]
+}

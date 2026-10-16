@@ -1,0 +1,242 @@
+{
+  "id": "career-interview",
+  "skill": "career.interview",
+  "feedbackLabel": "the job interview",
+  "setting": "Marcus is interviewing you for a role you want. Answer like a colleague: a short example, what you did, and what changed.",
+  "sceneNote": "Adults only. Respectful practice. No sexual content, no pressure, no appearance ratings, no contact details, no private meetups. Marcus is a hiring manager. Professional, a little impatient. No insults.",
+  "characters": [
+    {
+      "id": "marcus",
+      "name": "Marcus",
+      "trait": "direct interviewer",
+      "voice": {
+        "pitch": 0.8,
+        "rate": 1.05,
+        "index": 2
+      }
+    }
+  ],
+  "maxTurns": 4,
+  "signals": {
+    "greeting": [
+      "hi",
+      "hello",
+      "hey",
+      "good morning",
+      "good afternoon"
+    ],
+    "context": [
+      "role",
+      "team",
+      "project",
+      "example",
+      "result",
+      "led",
+      "built",
+      "learned",
+      "job",
+      "interview",
+      "skill"
+    ],
+    "question": [
+      "?",
+      "what",
+      "how",
+      "which",
+      "could you",
+      "can you",
+      "would you",
+      "do you"
+    ],
+    "intro": [
+      "i'm ",
+      "i am ",
+      "my name",
+      "i work",
+      "i help",
+      "i train",
+      "i run"
+    ],
+    "humor": [
+      "haha",
+      "honestly",
+      "funny",
+      "luckily",
+      "between us",
+      "fair warning"
+    ],
+    "inclusive": [
+      "how about you",
+      "what do you think",
+      "your team",
+      "together",
+      "what about you",
+      "and you"
+    ],
+    "pushy": [
+      "your number",
+      "phone number",
+      "sexy",
+      "you're hot",
+      "you are hot",
+      "come on",
+      "you have to",
+      "right now or"
+    ],
+    "exit": [
+      "nice meeting",
+      "thank you",
+      "thanks",
+      "goodbye",
+      "bye",
+      "have a good",
+      "next step",
+      "talk soon",
+      "see you"
+    ]
+  },
+  "responses": {
+    "open_good": [
+      {
+        "speaker": "marcus",
+        "text": "Thanks for coming in. Tell me about a time you had to deliver with a messy brief."
+      }
+    ],
+    "open_flat": [
+      {
+        "speaker": "marcus",
+        "text": "Let us start. Give me one example, not a list of traits."
+      }
+    ],
+    "context": [
+      {
+        "speaker": "marcus",
+        "text": "That is a real example. What did you do in the first week?"
+      }
+    ],
+    "question": [
+      {
+        "speaker": "marcus",
+        "text": "Fair question. The team is small and the work is visible. What do you want to know about the role?"
+      }
+    ],
+    "humor": [
+      {
+        "speaker": "marcus",
+        "text": "All right, that was human. Now the result: what changed because of you?"
+      }
+    ],
+    "intro": [
+      {
+        "speaker": "marcus",
+        "text": "Good. I know your lane. Give me the outcome in one sentence."
+      }
+    ],
+    "inclusive": [
+      {
+        "speaker": "marcus",
+        "text": "I noticed you asked about the team. They will care that you asked."
+      }
+    ],
+    "pushy": [
+      {
+        "speaker": "marcus",
+        "text": "Ease off. An interview is not a demand. We are done for today."
+      }
+    ],
+    "neutral": [
+      {
+        "speaker": "marcus",
+        "text": "Be specific. What did you do, and what moved?"
+      }
+    ],
+    "exit": [
+      {
+        "speaker": "marcus",
+        "text": "Thank you. That was clear. We will be in touch about the next conversation."
+      }
+    ],
+    "timeout": [
+      {
+        "speaker": "marcus",
+        "text": "We should wrap. Close with why this role, then stop."
+      }
+    ]
+  },
+  "rubric": [
+    {
+      "id": "greeting",
+      "label": "Clear opener",
+      "points": 15,
+      "tip": "Start with a calm hello and your point."
+    },
+    {
+      "id": "context",
+      "label": "Used the real situation",
+      "points": 20,
+      "tip": "Name the thing in front of you, not a generic line."
+    },
+    {
+      "id": "question",
+      "label": "Asked a real question",
+      "points": 20,
+      "tip": "Ask one open question so they can answer."
+    },
+    {
+      "id": "intro",
+      "label": "Said who you are",
+      "points": 10,
+      "tip": "One short line about who you are is enough."
+    },
+    {
+      "id": "humor",
+      "label": "Easy tone",
+      "points": 10,
+      "tip": "A little warmth beats a stiff speech."
+    },
+    {
+      "id": "inclusive",
+      "label": "Left room for them",
+      "points": 10,
+      "tip": "Invite their view instead of talking over them."
+    },
+    {
+      "id": "exit",
+      "label": "Clean close",
+      "points": 15,
+      "tip": "End with thanks and a next step."
+    }
+  ],
+  "penalties": [
+    {
+      "id": "pushy",
+      "label": "Pushy or personal remark",
+      "points": 30,
+      "tip": "Drop pressure. Stay on the topic and their comfort."
+    }
+  ],
+  "dimensions": [
+    {
+      "label": "Clarity",
+      "signals": [
+        "question",
+        "context"
+      ]
+    },
+    {
+      "label": "Confidence",
+      "signals": [
+        "greeting",
+        "exit",
+        "humor"
+      ]
+    },
+    {
+      "label": "Warmth",
+      "signals": [
+        "inclusive",
+        "intro"
+      ]
+    }
+  ]
+}
