@@ -290,18 +290,19 @@ button.ghost {
 .bottomnav button[disabled] { display: none; }
 .presenter {
   position: fixed; right: 8px; bottom: calc(74px + env(safe-area-inset-bottom)); z-index: 28;
-  width: min(32vw, 136px); aspect-ratio: 9 / 16; pointer-events: none;
+  width: min(32vw, 136px); aspect-ratio: 180 / 318; pointer-events: none;
 }
 .presenter[hidden] { display: none !important; }
 .presenter-hit {
   pointer-events: auto; display: block; width: 100%; height: 100%; margin: 0; padding: 0;
-  border: 0; background: transparent; cursor: pointer; border-radius: 30px; overflow: hidden;
-  -webkit-mask-image: radial-gradient(ellipse 68% 74% at 50% 44%, #000 52%, rgba(0,0,0,.4) 76%, transparent 100%);
-  mask-image: radial-gradient(ellipse 68% 74% at 50% 44%, #000 52%, rgba(0,0,0,.4) 76%, transparent 100%);
+  border: 0; outline: 0; background: transparent; cursor: pointer; border-radius: 0; overflow: visible;
 }
-.presenter-hit video {
-  width: 100%; height: 100%; object-fit: cover; object-position: center center; display: block; background: transparent;
+.presenter-hit video,
+.presenter-hit canvas {
+  width: 100%; height: 100%; object-fit: contain; display: block; background: transparent;
 }
+.presenter-hit video[hidden],
+.presenter-hit canvas[hidden] { display: none !important; }
 .presenter-restore {
   position: fixed; right: 10px; bottom: calc(78px + env(safe-area-inset-bottom)); z-index: 28;
   min-height: 36px; padding: 6px 12px; border-radius: 999px;

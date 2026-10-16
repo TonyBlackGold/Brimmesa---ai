@@ -1,11 +1,17 @@
-// Miniature full-body presenter. Add another coach with BrimPresenter.register(id, { label, mp4, poster }).
-// The video file is not requested until that coach is actually shown.
+// Miniature full-body presenter. Amara is a transparent sprite sheet (iOS Safari
+// does not play WebM alpha). Another coach can still register an mp4.
+// Media is not requested until that coach is actually shown.
 (function (root) {
   const PRESENTERS = {
     amara: {
       label: 'Amara',
-      mp4: 'assets/amara-full.mp4',
-      poster: 'assets/amara-full-poster.webp'
+      sheet: 'assets/amara-full-sheet.webp',
+      frames: 48,
+      cols: 8,
+      frameWidth: 180,
+      frameHeight: 318,
+      fps: 8,
+      idleFrame: 24
     }
   };
   const HIDE_KEY = 'brimmesa.presenter.hidden';
@@ -13,11 +19,21 @@
   let stage = null;
   let hit = null;
   let video = null;
+  let canvas = null;
+  let ctx = null;
   let restoreBtn = null;
   let active = null;
   let desired = 'idle';
   let minimized = false;
+  let sheetImg = null;
+  let sheetFor = '';
+  let frameTimer = 0;
+  let sheetPlaying = false;
   try { minimized = sessionStorage.getItem(HIDE_KEY) === '1'; } catch (e) {}
+
+  function reduceMotion() {
+    return !!(root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
 
   function mount() {
     stage = document.createElement('div');
@@ -28,6 +44,9 @@
     hit.type = 'button';
     hit.className = 'presenter-hit';
     hit.id = 'presenterHit';
+    canvas = document.createElement('canvas');
+    canvas.id = 'presenterSheet';
+    canvas.hidden = true;
     video = document.createElement('video');
     video.id = 'presenterVideo';
     video.muted = true;
@@ -40,7 +59,8 @@
     video.preload = 'none';
     video.setAttribute('disablepictureinpicture', '');
     video.tabIndex = -1;
-    hit.append(video);
+    video.hidden = true;
+    hit.append(canvas, video);
     stage.append(hit);
 
     restoreBtn = document.createElement('button');
@@ -53,18 +73,103 @@
     restoreBtn.addEventListener('click', restore);
     document.body.append(stage, restoreBtn);
     document.addEventListener('visibilitychange', function () {
-      if (!video || !active || minimized) return;
+      if (!active || minimized) return;
+      const spec = PRESENTERS[active];
+      if (spec && spec.sheet) {
+        if (document.visibilityState !== 'visible') stopSheet();
+        else applyMotion();
+        return;
+      }
+      if (!video || !video.getAttribute('src')) return;
       if (document.visibilityState !== 'visible') video.pause();
       else applyMotion();
     });
   }
 
-  function known(id) { return !!(id && PRESENTERS[id] && PRESENTERS[id].mp4); }
+  function known(id) {
+    const spec = id && PRESENTERS[id];
+    return !!(spec && (spec.sheet || spec.mp4));
+  }
+
+  function stopSheet() {
+    if (frameTimer) cancelAnimationFrame(frameTimer);
+    frameTimer = 0;
+    sheetPlaying = false;
+  }
+
+  function drawSheetFrame(spec, index) {
+    if (!canvas || !ctx || !sheetImg || !sheetImg.complete || !sheetImg.naturalWidth) return;
+    const fw = spec.frameWidth;
+    const fh = spec.frameHeight;
+    const frame = ((index % spec.frames) + spec.frames) % spec.frames;
+    const col = frame % spec.cols;
+    const row = Math.floor(frame / spec.cols);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(sheetImg, col * fw, row * fh, fw, fh, 0, 0, canvas.width, canvas.height);
+  }
+
+  function holdSheet(spec) {
+    stopSheet();
+    const index = reduceMotion() ? 0 : (Number.isFinite(spec.idleFrame) ? spec.idleFrame : 0);
+    drawSheetFrame(spec, index);
+  }
+
+  function playSheet(spec) {
+    stopSheet();
+    if (desired !== 'speaking' || minimized || reduceMotion()) {
+      holdSheet(spec);
+      return;
+    }
+    const fps = spec.fps || 8;
+    const t0 = performance.now();
+    sheetPlaying = true;
+    const step = function (now) {
+      if (!sheetPlaying || !active || desired !== 'speaking' || minimized) return;
+      const index = Math.floor((now - t0) / (1000 / fps)) % spec.frames;
+      drawSheetFrame(spec, index);
+      frameTimer = requestAnimationFrame(step);
+    };
+    frameTimer = requestAnimationFrame(step);
+  }
+
+  function ensureSheet(spec) {
+    canvas.hidden = false;
+    video.hidden = true;
+    if (video.getAttribute('src')) {
+      try { video.pause(); } catch (e) {}
+    }
+    if (canvas.width !== spec.frameWidth || canvas.height !== spec.frameHeight) {
+      canvas.width = spec.frameWidth;
+      canvas.height = spec.frameHeight;
+      ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+    }
+    if (!ctx) ctx = canvas.getContext('2d');
+    if (!sheetImg || sheetFor !== spec.sheet) {
+      sheetFor = spec.sheet;
+      sheetImg = new Image();
+      sheetImg.decoding = 'async';
+      sheetImg.onload = function () {
+        if (active && PRESENTERS[active] && PRESENTERS[active].sheet === sheetFor) playSheet(PRESENTERS[active]);
+      };
+      sheetImg.src = spec.sheet;
+      return;
+    }
+    if (sheetImg.complete) playSheet(spec);
+  }
 
   function applyMotion() {
-    if (!video || !active || minimized || !video.getAttribute('src')) return;
-    video.dataset.state = desired;
+    if (!active || minimized) return;
+    const spec = PRESENTERS[active];
+    if (!spec) return;
     if (stage) stage.dataset.state = desired;
+    if (spec.sheet) {
+      if (desired === 'speaking' && sheetPlaying) return;
+      playSheet(spec);
+      return;
+    }
+    if (!video || !video.getAttribute('src')) return;
+    video.dataset.state = desired;
     if (desired === 'speaking') {
       video.playbackRate = 1;
       const pending = video.play();
@@ -73,6 +178,9 @@
   }
 
   function ensureSrc(spec) {
+    stopSheet();
+    canvas.hidden = true;
+    video.hidden = false;
     if (video.dataset.coach === active && video.getAttribute('src')) return;
     video.dataset.coach = active;
     video.poster = spec.poster || '';
@@ -90,20 +198,25 @@
     restoreBtn.setAttribute('aria-label', 'Show ' + spec.label);
     restoreBtn.dataset.state = desired;
     if (minimized) {
-      if (!video.paused) video.pause();
+      stopSheet();
+      if (video && !video.paused) video.pause();
       stage.hidden = true;
       restoreBtn.hidden = false;
       return;
     }
     restoreBtn.hidden = true;
     stage.hidden = false;
-    ensureSrc(spec);
-    applyMotion();
+    if (spec.sheet) ensureSheet(spec);
+    else {
+      ensureSrc(spec);
+      applyMotion();
+    }
   }
 
   function hide() {
     active = null;
     desired = 'idle';
+    stopSheet();
     if (!stage) return;
     if (video && !video.paused) video.pause();
     stage.hidden = true;
@@ -122,6 +235,7 @@
     minimized = true;
     try { sessionStorage.setItem(HIDE_KEY, '1'); } catch (e) {}
     if (!active) { hide(); return; }
+    stopSheet();
     if (video) video.pause();
     if (stage) stage.hidden = true;
     if (restoreBtn) {
@@ -197,7 +311,7 @@
   }
 
   root.BrimPresenter = {
-    register: function (id, spec) { if (id && spec && spec.mp4) PRESENTERS[id] = spec; },
+    register: function (id, spec) { if (id && spec && (spec.mp4 || spec.sheet)) PRESENTERS[id] = spec; },
     known: known,
     show: show,
     hide: hide,
