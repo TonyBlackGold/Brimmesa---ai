@@ -83,7 +83,7 @@ export class PortraitFace {
       this.node.replaceChildren();
       this.node.append(this.canvas);
     }
-    const gl = this.canvas.getContext('webgl', { alpha: false, antialias: true, premultipliedAlpha: false, preserveDrawingBuffer: true });
+    const gl = this.canvas.getContext('webgl', { alpha: false, antialias: true, premultipliedAlpha: false });
     if (!gl) throw new Error('WebGL unavailable');
     this.gl = gl;
     this.canvas.addEventListener('webglcontextlost', ev => {
