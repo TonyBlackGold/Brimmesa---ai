@@ -466,5 +466,20 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
   const reloaded = Lib.createLibrary({ get: () => mem.v, set: v => { mem.v = v; } });
   assert.equal(reloaded.items().length, lib.items().length);
 
+  console.log('11) communication loop');
+  const cia = Lib.challenge('marcus-cia', []);
+  assert.equal(Lib.LOOP.length, 6);
+  assert.equal(cia.title, 'CIA triad');
+  const strong = Lib.rubric('Confidentiality means the wrong people do not see it. Integrity means nobody changed it. Availability means I can open it.', cia, 'explain');
+  assert.equal(strong.dims.accuracy, 100);
+  assert(strong.dims.confidence >= 80);
+  const shaky = Lib.rubric('maybe stuff', cia, 'explain');
+  assert(shaky.dims.confidence < 50 && shaky.dims.accuracy < 50);
+  assert(/Scores: Clarity/.test(Lib.feedbackText(strong)));
+  assert(Lib.challenge('marcus-phish', []).locked);
+  assert(!Lib.challenge('marcus-phish', ['marcus-cia']).locked);
+  const kept = Lib.readScores('nope', shaky);
+  assert.equal(kept.source, 'script');
+
   console.log('\nALL TESTS PASSED');
 })().catch(err => { console.error('FAIL', err); process.exit(1); });

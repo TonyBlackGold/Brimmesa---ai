@@ -372,6 +372,13 @@ button.ghost {
 .panel.user { background: #16130e; color: #f7f1e6; margin-left: 12%; box-shadow: 4px 4px 0 #8d6428; }
 .panel.aria, .panel.coach { margin-right: 8%; }
 .panel.feedback { background: #fff8df; }
+.loop-bar { margin: 8px 0; }
+.loop-bar p { margin: 0 0 6px; font-size: 13px; }
+.loop-bar ol { display: flex; gap: 6px; list-style: none; padding: 0; margin: 0; }
+.loop-bar li { flex: 1; text-align: center; font-size: 9px; color: var(--muted); letter-spacing: .02em; }
+.loop-bar li i { display: block; height: 8px; border-radius: 99px; background: #2a261c; margin-bottom: 4px; }
+.loop-bar li.on, .loop-bar li.done { color: var(--gold-2); }
+.loop-bar li.on i, .loop-bar li.done i { background: #e0b65a; }
 .view-panel[hidden] { display: none !important; }
 .view-panel label.field { display: block; margin: 8px 0 2px; font-size: 13px; color: var(--muted); }
 .view-panel select, .view-panel textarea, .view-panel input[type="text"], .view-panel input[type="file"] {
@@ -500,6 +507,10 @@ input[type=checkbox] { width: 22px; height: 22px; }
             <label class="goal">Your goal<input id="goalInput" maxlength="180" placeholder="What are you working toward?"></label>
           </div>
         </article>
+        <div id="loopBar" class="loop-bar" hidden>
+          <p id="loopTitle">Communication gym</p>
+          <ol id="loopDots"></ol>
+        </div>
         <div id="comic" class="comic" aria-live="polite"></div>
       </div>
     </section>
@@ -542,6 +553,8 @@ input[type=checkbox] { width: 22px; height: 22px; }
       <div class="dlg-actions">
         <button class="gold" id="marcusTeach" type="button">Teach this</button>
         <button class="ghost" id="marcusQuiz" type="button">5-question quiz</button>
+        <button class="gold" id="marcusCia" type="button">CIA mini challenge</button>
+        <button class="ghost" id="marcusPhish" type="button" disabled>Phishing locked</button>
       </div>
       <form id="marcusAsk">
         <input id="marcusQ" autocomplete="off" placeholder="Ask Marcus about this objective">

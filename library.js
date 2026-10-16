@@ -247,6 +247,132 @@
     };
   }
 
-  const api = { createLibrary, hash, chunkText, parseTimed, parseTakeout, youtube, retrievalPrompt, fmtTime };
+  const LOOP = [
+    { id: 'learn', label: 'Learn' },
+    { id: 'explain', label: 'Explain' },
+    { id: 'practice', label: 'Practice' },
+    { id: 'communicate', label: 'Communicate' },
+    { id: 'improve', label: 'Improve' },
+    { id: 'advance', label: 'Advance' }
+  ];
+  const DIMENSIONS = [
+    { id: 'clarity', label: 'Clarity' },
+    { id: 'accuracy', label: 'Accuracy' },
+    { id: 'organization', label: 'Organization' },
+    { id: 'vocabulary', label: 'Vocabulary' },
+    { id: 'delivery', label: 'Delivery' },
+    { id: 'confidence', label: 'Confidence' }
+  ];
+  const TIPS = {
+    clarity: 'One idea, then stop.',
+    accuracy: 'Name the real idea, not a nearby one.',
+    organization: 'First the point, then the reason.',
+    vocabulary: 'Use the word a listener could repeat.',
+    delivery: 'Say it in a breath or two.',
+    confidence: 'Start on the point. Skip the apology.'
+  };
+  const CHALLENGES = [
+    {
+      id: 'marcus-cia',
+      coach: 'marcus',
+      title: 'CIA triad',
+      concept: 'the CIA triad',
+      achievement: 'Said it twice',
+      unlocks: 'marcus-phish',
+      keywords: ['confidentiality', 'integrity', 'availability'],
+      practiceKeywords: ['availability'],
+      learn: "Thirty seconds. CIA is not the spies. Confidentiality means the wrong people don't see it. Integrity means nobody quietly changed it. Availability means you can open it when the lights flicker. A hospital chart goes dark in a power cut? That's availability. Ha. Now you have to say it.",
+      explain: 'Your turn. Explain the CIA triad back to me. Voice is better. Tap to talk.',
+      practice: "Don't recite the poster. A clinic's charts vanish during an outage. Nothing was leaked. Which piece of CIA broke?",
+      practiceFix: 'Availability. The chart was unreachable, not stolen and not edited.',
+      surprise: 'Plot twist. The next room does not want the textbook.',
+      audiences: [
+        { id: 'friend', label: 'a friend', cue: 'No jargon. One story.' },
+        { id: 'interviewer', label: 'an interviewer', cue: 'A short example, what changed.' },
+        { id: 'classroom', label: 'a classroom', cue: 'Teach it so they could repeat it.' },
+        { id: 'professionals', label: 'professionals', cue: 'Plain and specific.' }
+      ]
+    },
+    {
+      id: 'marcus-phish',
+      coach: 'marcus',
+      title: 'Phishing',
+      concept: 'phishing',
+      requires: 'marcus-cia',
+      achievement: 'Caught the fake',
+      keywords: ['phish', 'fake', 'link', 'spear'],
+      practiceKeywords: ['spear'],
+      learn: "Phishing is a fake message that wants a click. Spear phishing aims at one person, using their real names. If the whole finance team gets a fake invoice from their boss, that's the spear. Funny until the wire goes out.",
+      explain: 'Explain phishing back to me, including how spear phishing is different. Tap to talk.',
+      practice: 'Only the finance team gets a fake invoice that uses their manager\'s name. What is that called?',
+      practiceFix: 'Spear phishing. One target, familiar names.',
+      surprise: 'New room. They have already almost clicked.',
+      audiences: [
+        { id: 'friend', label: 'a friend', cue: 'Tell them what to look for before they tap.' },
+        { id: 'interviewer', label: 'an interviewer', cue: 'Say what you would do first.' },
+        { id: 'classroom', label: 'a classroom', cue: 'Give them one check they can remember.' },
+        { id: 'professionals', label: 'professionals', cue: 'Skip the scare. Say the control.' }
+      ]
+    }
+  ];
+
+  function challenge(id, done) {
+    const spec = CHALLENGES.find(c => c.id === id);
+    if (!spec) return null;
+    const have = done || [];
+    if (spec.requires && have.indexOf(spec.requires) < 0) return { locked: true, id: spec.id, requires: spec.requires, title: spec.title };
+    return spec;
+  }
+  function rubric(text, spec, step) {
+    const t = String(text || '').toLowerCase();
+    const words = t.split(/\s+/).filter(Boolean);
+    const keys = step === 'practice' ? (spec.practiceKeywords || []) : (spec.keywords || []);
+    const hit = keys.filter(k => t.includes(k)).length;
+    const accuracy = keys.length ? Math.round(100 * hit / keys.length) : 70;
+    const clarity = words.length >= 8 && words.length <= 60 ? 100 : words.length >= 4 ? 60 : 25;
+    const organization = /\b(first|then|because|so|means|that's|thats)\b/.test(t) || (t.match(/[.!?]/g) || []).length >= 1 ? 80 : 40;
+    const vocabulary = hit > 0 ? 100 : 30;
+    const delivery = words.length >= 6 && words.length <= 45 ? 90 : words.length > 45 ? 55 : 35;
+    const confidence = /\b(maybe|sorry|i don't know|i dont know|not sure|kinda|kind of)\b/.test(t) ? 35 : 85;
+    const dims = { clarity: clarity, accuracy: accuracy, organization: organization, vocabulary: vocabulary, delivery: delivery, confidence: confidence };
+    const overall = Math.round(DIMENSIONS.reduce((a, d) => a + dims[d.id], 0) / DIMENSIONS.length);
+    const low = DIMENSIONS.slice().sort((a, b) => dims[a.id] - dims[b.id])[0];
+    return { dims: dims, overall: overall, tip: TIPS[low.id], low: low.label, source: 'script' };
+  }
+  function feedbackText(score) {
+    const bits = DIMENSIONS.map(d => d.label + ' ' + score.dims[d.id]).join(', ');
+    return 'Scores: ' + bits + '. ' + (score.tip || '');
+  }
+  function evalPrompt(spec, step, text, audience) {
+    const room = audience ? audience.label : 'Marcus';
+    return [
+      'Score this spoken explanation. Return JSON only.',
+      'Fields: clarity, accuracy, organization, vocabulary, delivery, confidence, tip.',
+      'Each score is an integer from 0 to 100. tip is one short sentence.',
+      'Concept: ' + spec.concept + '. Step: ' + step + '. Audience: ' + room + '.',
+      'Accuracy means the idea matches ' + (spec.keywords || []).join(', ') + '.',
+      'Do not rewrite their answer. Write the brand as Brimmesa.',
+      'They said: ' + String(text || '').slice(0, 500)
+    ].join('\n');
+  }
+  function readScores(raw, fallback) {
+    let j = null;
+    const clean = String(raw || '').replace(/```json|```/g, '').trim();
+    try { j = JSON.parse(clean); } catch (e) {
+      const m = clean.match(/\{[\s\S]*\}/);
+      if (m) { try { j = JSON.parse(m[0]); } catch (e2) { j = null; } }
+    }
+    if (!j) return fallback;
+    const dims = {};
+    for (let i = 0; i < DIMENSIONS.length; i++) {
+      const n = Number(j[DIMENSIONS[i].id]);
+      if (!Number.isFinite(n)) return fallback;
+      dims[DIMENSIONS[i].id] = Math.max(0, Math.min(100, Math.round(n)));
+    }
+    const overall = Math.round(DIMENSIONS.reduce((a, d) => a + dims[d.id], 0) / DIMENSIONS.length);
+    return { dims: dims, overall: overall, tip: String(j.tip || fallback.tip).slice(0, 140), low: fallback.low, source: 'gemini' };
+  }
+
+  const api = { createLibrary, hash, chunkText, parseTimed, parseTakeout, youtube, retrievalPrompt, fmtTime, LOOP, DIMENSIONS, challenge, rubric, feedbackText, evalPrompt, readScores };
   if (typeof module !== 'undefined') module.exports = api; else root.BrimLibrary = api;
 })(this);

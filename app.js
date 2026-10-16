@@ -548,7 +548,7 @@
     if (!line || line.speaker !== 'coach' || document.body.dataset.view === 'area') return line;
     return Object.assign({}, line, { speaker: 'aria' });
   }
-  let opener = '', openerHeard = false;
+  let opener = '', openerHeard = false, loopRun = null;
   function idleCaption() {
     if (opener) {
       $('bubbleName').textContent = 'Aria';
@@ -584,15 +584,20 @@
     setAvatarState('idle', { speaker: 'coach' });
     busy = false;
     save();
-    if ($('auto').checked && rec && lines && lines.length && document.visibilityState === 'visible') setTimeout(listen, 250);
+    if ($('auto').checked && rec && !loopRun && lines && lines.length && document.visibilityState === 'visible') setTimeout(listen, 250);
   }
   async function send(text) {
     const value = (text || '').trim();
     if (!value) return;
     unlockAudio();
     greeted = true;
+    openerHeard = true;
+    if ($('hearAria')) $('hearAria').hidden = true;
+    if ($('micLabel')) $('micLabel').textContent = 'Tap to Talk';
+    if (loopRun && !loopRun.waiting) return;
     interrupt();
     show({ speaker: 'user', text: value });
+    if (loopRun && loopRun.waiting) { await continueLoop(value); return; }
     try {
       const emotion = (await import('./avatar/lipsync.js')).emotionFromText(value);
       if (emotion && face) face.react(emotion);
@@ -1458,6 +1463,12 @@
       box.append(row);
     });
     if (!box.childElementCount) box.append(el('p', 'fine', 'No watch history yet.'));
+    const phish = $('marcusPhish');
+    if (phish) {
+      const locked = BrimLibrary.challenge('marcus-phish', Object.keys(eng.p.achievements || {})).locked;
+      phish.disabled = !!locked;
+      phish.textContent = locked ? 'Phishing locked' : 'Phishing challenge';
+    }
   }
   function libPanels(lines) {
     const box = $('libraryOut');
@@ -1587,6 +1598,110 @@
     quiz = { items: items.slice(0, 5), i: 0, correct: 0 };
     askQuiz();
   };
+  let loopGen = 0;
+  function renderDots() {
+    const bar = $('loopBar');
+    if (!bar) return;
+    if (!loopRun) { bar.hidden = true; return; }
+    bar.hidden = false;
+    const step = BrimLibrary.LOOP[Math.min(loopRun.i, BrimLibrary.LOOP.length - 1)];
+    $('loopTitle').textContent = loopRun.spec.title + ' · ' + step.label;
+    const ol = $('loopDots');
+    ol.replaceChildren();
+    BrimLibrary.LOOP.forEach((s, i) => {
+      const li = document.createElement('li');
+      if (i < loopRun.i) li.className = 'done';
+      else if (i === loopRun.i) li.className = 'on';
+      li.append(document.createElement('i'), document.createTextNode(s.label));
+      ol.append(li);
+    });
+  }
+  async function sayMarcus(text) {
+    renderDots();
+    await play([{ speaker: 'marcus', text: text }]);
+  }
+  async function evaluateTurn(text, step) {
+    const fallback = BrimLibrary.rubric(text, loopRun.spec, step);
+    if (!localStorage.getItem(GEMINI_KEY) || llm.overLimit()) return fallback;
+    try {
+      const raw = await llm.generate(BrimLibrary.evalPrompt(loopRun.spec, step, text, loopRun.audience), null);
+      return BrimLibrary.readScores(raw, fallback);
+    } catch (e) { return fallback; }
+  }
+  async function beginChallenge(id) {
+    const spec = BrimLibrary.challenge(id, Object.keys(eng.p.achievements || {}));
+    if (!spec || spec.locked) return;
+    const gen = ++loopGen;
+    openerHeard = true;
+    greeted = true;
+    if ($('hearAria')) $('hearAria').hidden = true;
+    $('micLabel').textContent = 'Tap to Talk';
+    loopRun = { spec: spec, i: 0, waiting: false, scores: [], audience: spec.audiences[0] };
+    showHome();
+    await sayMarcus(spec.learn);
+    if (gen !== loopGen || !loopRun) return;
+    loopRun.i = 1;
+    await sayMarcus(spec.explain);
+    if (gen !== loopGen || !loopRun) return;
+    loopRun.waiting = true;
+    renderDots();
+  }
+  async function continueLoop(text) {
+    if (!loopRun) return;
+    const gen = ++loopGen;
+    const step = BrimLibrary.LOOP[loopRun.i].id;
+    loopRun.waiting = false;
+    if (step === 'explain') {
+      const score = await evaluateTurn(text, 'explain');
+      if (gen !== loopGen || !loopRun) return;
+      loopRun.explainScore = score;
+      loopRun.i = 2;
+      await sayMarcus(BrimLibrary.feedbackText(score));
+      if (gen !== loopGen || !loopRun) return;
+      await sayMarcus(loopRun.spec.practice);
+      if (gen !== loopGen || !loopRun) return;
+      loopRun.waiting = true;
+      renderDots();
+      return;
+    }
+    if (step === 'practice') {
+      const score = await evaluateTurn(text, 'practice');
+      if (gen !== loopGen || !loopRun) return;
+      const note = score.dims.accuracy >= 60 ? 'Ha. You caught it.' : loopRun.spec.practiceFix;
+      loopRun.i = 3;
+      await sayMarcus(note + ' ' + loopRun.spec.surprise + ' Explain ' + loopRun.spec.concept + ' to ' + loopRun.audience.label + '. ' + loopRun.audience.cue);
+      if (gen !== loopGen || !loopRun) return;
+      loopRun.waiting = true;
+      renderDots();
+      return;
+    }
+    if (step === 'communicate') {
+      const score = await evaluateTurn(text, 'communicate');
+      if (gen !== loopGen || !loopRun) return;
+      loopRun.i = 4;
+      await sayMarcus(BrimLibrary.feedbackText(score));
+      if (gen !== loopGen || !loopRun) return;
+      loopRun.i = 5;
+      const first = loopRun.explainScore ? loopRun.explainScore.overall : score.overall;
+      const overall = Math.round((first + score.overall) / 2);
+      const r = BrimEngine.awardXP(eng.p, 'comm.' + loopRun.spec.id, overall);
+      BrimEngine.touchStreak(eng.p, Date.now());
+      eng.p.achievements = eng.p.achievements || {};
+      eng.p.achievements[loopRun.spec.id] = { title: loopRun.spec.achievement, t: Date.now(), score: overall };
+      eng.p.history.unshift({ t: Date.now(), activity: loopRun.spec.title + ' challenge', score: overall, xp: r.xp, summary: loopRun.spec.achievement });
+      eng.p.history = eng.p.history.slice(0, 50);
+      eng.p.lastFeedback = loopRun.spec.title + ' challenge: score ' + overall + '. ' + loopRun.spec.achievement + '.';
+      save();
+      renderStats();
+      if ($('marcusPhish') && loopRun.spec.unlocks) { $('marcusPhish').disabled = false; $('marcusPhish').textContent = 'Phishing challenge'; }
+      const next = loopRun.spec.unlocks ? ' Phishing is unlocked.' : '';
+      await sayMarcus('Advance. Score ' + overall + ' across both tries. You earned ' + r.xp + ' XP. Achievement: ' + loopRun.spec.achievement + '.' + next);
+      renderDots();
+      loopRun.waiting = false;
+    }
+  }
+  if ($('marcusCia')) $('marcusCia').onclick = () => beginChallenge('marcus-cia');
+  if ($('marcusPhish')) $('marcusPhish').onclick = () => beginChallenge('marcus-phish');
 
   setupMap();
   showWorld('map');
