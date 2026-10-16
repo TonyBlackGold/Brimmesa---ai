@@ -23,6 +23,7 @@ User uploads stay in the browser. Repo files are the admin shelf. At load, `data
       "chunks": [{ "id": "c0", "text": "One original sentence.", "start": null }],
       "tags": ["security+"],
       "attribution": "Who wrote this, and that it is not copied course text.",
+      "citeInConversation": true,
       "hashKey": "atlas:marcus:example"
     }
   ]
@@ -30,5 +31,7 @@ User uploads stay in the browser. Repo files are the admin shelf. At load, `data
 ```
 
 `sourceType` is `youtube`, `playlist`, `transcript`, `notes`, or `takeout`. `start` is seconds, or null. Do not paste copyrighted transcripts or exam dumps. Original notes and reference links only.
+
+`citeInConversation` is per item. Omit it, or set `true`, and the coach cites the title, link, and timestamp out loud. Marcus's items use that default. Set `false` and the coach teaches the idea as their own coaching. Attribution, title, channel, and links stay in this file and on the Library screen. They are not spoken and not shown in the reply. The Amara Magick-moment item is `false`.
 
 The samples already shipped are `data/library/marcus/cia-note.json` and `data/library/amara/magick-moment.json`. The Amara file is original lesson notes with timestamps and links. It is not a stored transcript.

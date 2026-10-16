@@ -1482,7 +1482,9 @@
       const del = el('button', 'ghost', 'Delete');
       del.type = 'button';
       del.onclick = () => { lib.remove(it.id); renderLibrary(); };
-      row.append(el('strong', null, it.title), el('small', null, it.sourceType + (it.channel ? ' · ' + it.channel : '') + (it.url ? ' · ' + it.url : '')), del);
+      row.append(el('strong', null, it.title), el('small', null, it.sourceType + (it.channel ? ' · ' + it.channel : '') + (it.url ? ' · ' + it.url : '')));
+      if (it.attribution) row.append(el('small', null, it.attribution));
+      row.append(del);
       list.append(row);
     });
     if (!list.childElementCount) list.append(el('p', 'fine', 'Nothing saved for this coach yet.'));
@@ -1512,19 +1514,31 @@
     while (box.children.length > 8) box.firstChild.remove();
   }
   function citeLine(hit) {
-    if (!hit) return '';
+    if (!hit || hit.citeInConversation === false) return '';
     const when = hit.start == null ? '' : ' at ' + BrimLibrary.fmtTime(hit.start);
     return 'Source: ' + hit.title + (hit.url ? ' ' + hit.url : '') + when + '.';
   }
+  function scrubSource(text, hit) {
+    let line = String(text || '');
+    line = line.replace(/https?:\/\/\S+/gi, '');
+    line = line.replace(/\bLink:\s*/gi, '');
+    line = line.replace(/\bSource:[^.?!]*[.?!]?/gi, '');
+    if (hit && hit.title) line = line.replace(new RegExp(String(hit.title).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig'), '');
+    line = line.replace(/\b(youtube|bosshogg(?: macaroni)?)\b/gi, '');
+    return line.replace(/\s+/g, ' ').replace(/\s+([.?!])/g, '$1').trim();
+  }
   function scriptedMarcus(hits) {
     const useful = (hits || []).filter(h => h.sourceType !== 'playlist');
-    const bit = useful[0] ? useful[0].text : 'I only teach the Brimmesa outline saved on this device.';
+    const hit = useful[0] || hits[0];
+    const bit = hit ? (hit.citeInConversation === false ? BrimLibrary.lessonText(hit.text) : hit.text) : 'I only teach the Brimmesa outline saved on this device.';
     const sentence = bit.split(/(?<=[.!?])\s/)[0];
-    return 'Listen. ' + sentence + ' ' + citeLine(useful[0] || hits[0]);
+    const cite = citeLine(hit);
+    return 'Listen. ' + sentence + (cite ? ' ' + cite : '');
   }
   async function marcusSpeak(query) {
     const hits = lib.search(query, { coach: 'marcus', limit: 3 });
     const row = cast.find(c => c.id === 'marcus');
+    const top = (hits || []).filter(h => h.sourceType !== 'playlist')[0] || hits[0];
     let text = scriptedMarcus(hits);
     if (localStorage.getItem(GEMINI_KEY) && !llm.overLimit()) {
       try {
@@ -1533,8 +1547,9 @@
         if (clean) text = clean;
       } catch (e) {}
     }
-    const cite = citeLine((hits || []).filter(h => h.sourceType !== 'playlist')[0] || hits[0]);
+    const cite = citeLine(top);
     if (cite && text.indexOf('Source:') < 0) text += ' ' + cite;
+    if (top && top.citeInConversation === false) text = scrubSource(text, top);
     libPanels([{ speaker: 'marcus', text: text }]);
     play([{ speaker: 'marcus', text: text }]);
   }
@@ -1959,6 +1974,10 @@
   }
   function scriptedFromNotes(coach, hit) {
     const body = noteBody(hit);
+    if (hit.citeInConversation === false) {
+      if (coach.id === 'amara') return 'One claim. ' + body;
+      return body;
+    }
     const link = timedLink(hit);
     const when = hit.start == null ? '' : ' at ' + BrimLibrary.fmtTime(hit.start);
     const cite = 'Source: ' + hit.title + (link ? ' ' + link : '') + when + '.';
@@ -1969,12 +1988,13 @@
     const coach = cast.find(c => c.id === hostSession.coachId);
     if (!coach) return;
     const hits = lib.search(value + ' ' + (hostSession.topic || ''), { coach: coach.id, limit: 3 });
+    const quiet = hits.length && hits[0].citeInConversation === false;
     let text = '';
     if (hits.length && localStorage.getItem(GEMINI_KEY) && !llm.overLimit()) {
       try {
         const got = await llm.generate(BrimLibrary.retrievalPrompt(coach, value, hits), null);
         const clean = String(got || '').replace(/[*_`#]/g, '').replace(/\s+/g, ' ').trim().slice(0, 420);
-        if (clean) text = clean;
+        if (clean) text = quiet ? scrubSource(clean, hits[0]) : clean;
       } catch (e) {}
     }
     if (!text && hits.length) text = scriptedFromNotes(coach, hits[0]);

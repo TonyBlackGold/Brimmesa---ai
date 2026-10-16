@@ -458,7 +458,8 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
   assert.equal(merged.added, 1);
   assert.equal(lib.mergeInterests(rows).added, 0);
   const prompt = Lib.retrievalPrompt({ name: 'Marcus', personality: 'Impatient and direct.' }, 'What is hashing?', hits);
-  assert(/own words/i.test(prompt) && /verbatim/i.test(prompt) && /Hashing/.test(prompt));
+  assert(/own words/i.test(prompt) && /verbatim/i.test(prompt) && /Hashing/.test(prompt) && /Cite each source/i.test(prompt));
+  assert(hits[0].citeInConversation !== false);
   lib.seedSecurityPlus(content['secplus-701']);
   lib.seedSecurityPlus(content['secplus-701']);
   assert(lib.items().some(it => it.sourceType === 'playlist' && /playlist\?list=/.test(it.url)));
@@ -507,6 +508,11 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
   amaraLib.importAdmin(amaraItem);
   const amaraHit = amaraLib.search('magic moment mentor purpose', { coach: 'amara' })[0];
   assert(amaraHit && /youtube\.com/.test(amaraHit.url) && amaraHit.start != null);
+  assert.equal(amaraItem.citeInConversation, false);
+  assert.equal(amaraHit.citeInConversation, false);
+  assert.equal(Lib.citesInConversation({ coaches: ['marcus'] }), true);
+  const quietPrompt = Lib.retrievalPrompt({ name: 'Coach Amara', personality: 'Calm and exacting.' }, 'act or art', [amaraHit]);
+  assert(/own coaching/i.test(quietPrompt) && !/Cite each source/i.test(quietPrompt) && !/youtube/i.test(quietPrompt) && !/Bosshogg/i.test(quietPrompt));
 
   console.log('\nALL TESTS PASSED');
 })().catch(err => { console.error('FAIL', err); process.exit(1); });

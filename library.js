@@ -88,18 +88,31 @@
     const list = u.match(/[?&]list=([a-zA-Z0-9_-]+)/);
     return { url: u, videoId: video && video[1], playlistId: list && list[1], sourceType: list && !video ? 'playlist' : 'youtube' };
   }
+  function lessonText(text) {
+    return String(text || '').replace(/\s*Link:\s*https?:\/\/\S+/gi, '').replace(/https?:\/\/\S+/g, '').trim();
+  }
+  function citesInConversation(item) {
+    if (item && typeof item.citeInConversation === 'boolean') return item.citeInConversation;
+    return true;
+  }
   function retrievalPrompt(coach, query, hits) {
     const who = coach || {};
-    const notes = (hits || []).map(h => {
+    const list = hits || [];
+    const cite = list.some(h => h.citeInConversation !== false);
+    const notes = list.map(h => {
+      const body = (h.citeInConversation === false ? lessonText(h.text) : String(h.text || '')).slice(0, 220);
+      if (h.citeInConversation === false) return '- ' + body;
       const when = h.start == null ? '' : ' timestamp ' + fmtTime(h.start);
       const link = h.url ? ' ' + h.url : '';
-      return '- ' + (h.title || 'Untitled') + link + when + '\n  note: ' + String(h.text || '').slice(0, 220);
+      return '- ' + (h.title || 'Untitled') + link + when + '\n  note: ' + body;
     }).join('\n');
     return [
       'You are ' + (who.name || 'the coach') + '.',
       'Personality, separate from the notes: ' + (who.personality || ''),
       'Explain in your own words and your own slang. Never paste long verbatim source text. A short phrase at most.',
-      'Cite each source you use as its title, link, and timestamp when you have them.',
+      cite
+        ? 'Cite each source you use as its title, link, and timestamp when you have them.'
+        : 'Teach these ideas as your own coaching. Do not mention a source, title, channel, link, timestamp, video, or that the idea came from notes.',
       'Write the brand as Brimmesa, mixed case. One to three spoken sentences. No markdown.',
       'Notes:\n' + (notes || '(none)'),
       'Question: ' + String(query || '')
@@ -135,6 +148,7 @@
         chunks: chunks,
         tags: src.tags || [],
         attribution: src.attribution || '',
+        citeInConversation: citesInConversation(src),
         addedAt: src.addedAt || Date.now(),
         hash: digest
       };
@@ -190,7 +204,8 @@
           start: d.ch.start,
           sourceType: d.item.sourceType,
           coaches: d.item.coaches,
-          id: d.item.id
+          id: d.item.id,
+          citeInConversation: citesInConversation(d.item)
         };
       }).filter(d => d.score > 0).sort((a, b) => b.score - a.score);
       return scored.slice(0, limit);
@@ -241,6 +256,7 @@
         title: src.title || '',
         url: src.url || '',
         sourceType: src.sourceType || '',
+        citeInConversation: citesInConversation(src),
         chunks: (chunks || []).map(c => [c.start == null ? null : c.start, c.text || ''])
       }));
     }
@@ -262,6 +278,7 @@
         byKey.chunks = chunks;
         byKey.tags = src.tags || [];
         byKey.attribution = src.attribution || '';
+        byKey.citeInConversation = citesInConversation(src);
         byKey.contentHash = digestContent;
         persist();
         return { item: byKey, updated: true, duplicate: false };
@@ -427,6 +444,6 @@
     return { coachId: coach.id, topic: about ? about[1].trim() : '', place: coach.place, dest: coach.dest, line: coach.line };
   }
 
-  const api = { createLibrary, hash, chunkText, parseTimed, parseTakeout, youtube, retrievalPrompt, fmtTime, LOOP, DIMENSIONS, challenge, rubric, feedbackText, evalPrompt, readScores, keywordIntent, HOSTS };
+  const api = { createLibrary, hash, chunkText, parseTimed, parseTakeout, youtube, retrievalPrompt, citesInConversation, lessonText, fmtTime, LOOP, DIMENSIONS, challenge, rubric, feedbackText, evalPrompt, readScores, keywordIntent, HOSTS };
   if (typeof module !== 'undefined') module.exports = api; else root.BrimLibrary = api;
 })(this);
