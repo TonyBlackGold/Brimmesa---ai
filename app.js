@@ -175,6 +175,7 @@
       } else node.dataset.state = 'idle';
     });
     $('micLabel').textContent = state === 'listening' ? 'Listening' : state === 'speaking' ? 'Speaking' : state === 'thinking' ? 'Thinking' : 'Tap to Talk';
+    syncPresenter(known ? state : 'idle', speaker);
     if (face) {
       const amara = speaker === 'coach' || speaker === 'amara';
       face.setState(amara || state === 'idle' ? (known ? state : 'idle') : 'idle');
@@ -182,6 +183,36 @@
     }
   }
   window.setAvatarState = setAvatarState;
+
+  function presenterCoach(speaker, view) {
+    if (speaker === 'amara') return 'amara';
+    if (speaker === 'coach' && view === 'area') return 'amara';
+    if (speaker === 'marcus' || speaker === 'jasmine' || speaker === 'renee') return speaker;
+    return null;
+  }
+  function stageCoach() {
+    if (hostSession && hostSession.coachId) return hostSession.coachId;
+    const view = document.body.dataset.view;
+    if (view === 'area' && (eng.mode === 'reflect' || eng.mode === 'area' || eng.act)) return 'amara';
+    return null;
+  }
+  function syncPresenter(state, speaker) {
+    const P = window.BrimPresenter;
+    if (!P) return;
+    const view = document.body.dataset.view || '';
+    const speakingId = state === 'speaking' ? presenterCoach(speaker, view) : null;
+    const stageId = stageCoach();
+    if (speakingId && P.known(speakingId)) {
+      P.show(speakingId);
+      P.setState('speaking');
+      return;
+    }
+    if (stageId && P.known(stageId) && P.current() === stageId) {
+      P.setState(state && state !== 'speaking' ? state : 'idle');
+      return;
+    }
+    if (!stageId || !P.known(stageId)) P.hide();
+  }
 
   let face = null, facePromise = null, faceFailed = false;
   function avatarPref() { return localStorage.getItem('brimmesa.avatar'); }
@@ -717,6 +748,7 @@
     if (name === 'scenarios') renderScenarios();
     if (name === 'library') renderLibrary();
     if (name === 'progress') renderProgress();
+    syncPresenter(document.body.dataset.voice || 'idle', '');
     if (face) face.setVisible(false);
     const shell = document.querySelector('.shell');
     if (shell) shell.hidden = true;
@@ -781,6 +813,7 @@
     document.querySelectorAll('[data-area]').forEach(btn => btn.classList.toggle('on', btn.dataset.area === area.id));
     document.body.classList.remove('nav-open');
     paintScores();
+    syncPresenter(document.body.dataset.voice || 'idle', '');
   }
   function launchActivity(a) {
     unlockAudio();
@@ -1886,6 +1919,7 @@
     const who = hostSession ? ((cast.find(c => c.id === hostSession.coachId) || {}).name || '') : '';
     hostSession = null;
     hostLock = false;
+    syncPresenter('idle', 'aria');
     if (window.BrimMap) window.BrimMap.fit();
     if ($('visitCard')) $('visitCard').hidden = true;
     const bit = who ? 'You were with ' + who : 'Welcome back';

@@ -288,6 +288,28 @@ button.ghost {
 .bottomnav button { flex: 1; background: transparent; border: 0; color: var(--muted); font-size: 10px; min-height: 48px; letter-spacing: .02em; }
 .bottomnav button.on { color: var(--gold-2); }
 .bottomnav button[disabled] { display: none; }
+.presenter {
+  position: fixed; right: 8px; bottom: calc(74px + env(safe-area-inset-bottom)); z-index: 28;
+  width: min(32vw, 136px); aspect-ratio: 9 / 16; pointer-events: none;
+}
+.presenter[hidden] { display: none !important; }
+.presenter-hit {
+  pointer-events: auto; display: block; width: 100%; height: 100%; margin: 0; padding: 0;
+  border: 0; background: transparent; cursor: pointer; border-radius: 30px; overflow: hidden;
+  -webkit-mask-image: radial-gradient(ellipse 68% 74% at 50% 44%, #000 52%, rgba(0,0,0,.4) 76%, transparent 100%);
+  mask-image: radial-gradient(ellipse 68% 74% at 50% 44%, #000 52%, rgba(0,0,0,.4) 76%, transparent 100%);
+}
+.presenter-hit video {
+  width: 100%; height: 100%; object-fit: cover; object-position: center center; display: block; background: transparent;
+}
+.presenter-restore {
+  position: fixed; right: 10px; bottom: calc(78px + env(safe-area-inset-bottom)); z-index: 28;
+  min-height: 36px; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid rgba(224, 182, 90, .7); background: rgba(12, 10, 8, .9); color: #f3d48a;
+  font-size: 12px; letter-spacing: .04em;
+}
+.presenter-restore[hidden] { display: none !important; }
+.presenter-restore[data-state="speaking"] { box-shadow: 0 0 0 3px rgba(224, 182, 90, .35); }
 .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 35; }
 @media (max-width: 720px) {
   header.top { flex-wrap: wrap; align-items: flex-start; row-gap: 8px; }
@@ -767,6 +789,7 @@ input[type=checkbox] { width: 22px; height: 22px; }
 <script src="engine.js"></script>
 <script src="library.js"></script>
 <script src="speech.js"></script>
+<script src="presenter.js"></script>
 <script src="app.js"></script>
 <script>
 if ('serviceWorker' in navigator) {
