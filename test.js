@@ -441,5 +441,30 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
   assert.equal(cast.find(c => c.id === 'renee').voice.elevenName, 'Sarah');
   assert.equal(cast.find(c => c.id === 'marcus').voice.elevenName, 'Daniel');
 
+  console.log('10) knowledge library');
+  const Lib = require('./library.js');
+  const mem = { v: null };
+  const lib = Lib.createLibrary({ get: () => mem.v, set: v => { mem.v = v; } });
+  const first = lib.add({ coaches: ['marcus'], title: 'Hashing', sourceType: 'notes', text: 'Hashing checks integrity with a fingerprint. Encryption is reversible with a key.' });
+  const dup = lib.add({ coaches: ['marcus'], title: 'Hashing', sourceType: 'notes', text: 'Hashing checks integrity with a fingerprint. Encryption is reversible with a key.' });
+  assert(dup.duplicate && lib.items().length === 1 && first.item.chunks.length >= 1);
+  const hits = lib.search('integrity fingerprint', { coach: 'marcus' });
+  assert(hits.length && /integrity/i.test(hits[0].text));
+  const timed = Lib.parseTimed('WEBVTT\n\n00:00:01.000 --> 00:00:04.000\nHashing checks integrity.\n');
+  assert(timed.chunks.length === 1 && timed.chunks[0].start === 1);
+  const rows = Lib.parseTakeout(JSON.stringify([{ title: 'Watched Security Plus', titleUrl: 'https://www.youtube.com/watch?v=abc', subtitles: [{ name: 'Channel' }], time: '2024-01-02T00:00:00Z' }]));
+  assert(rows[0].title === 'Security Plus' && rows[0].channel === 'Channel');
+  const merged = lib.mergeInterests(rows.concat(rows));
+  assert.equal(merged.added, 1);
+  assert.equal(lib.mergeInterests(rows).added, 0);
+  const prompt = Lib.retrievalPrompt({ name: 'Marcus', personality: 'Impatient and direct.' }, 'What is hashing?', hits);
+  assert(/own words/i.test(prompt) && /verbatim/i.test(prompt) && /Hashing/.test(prompt));
+  lib.seedSecurityPlus(content['secplus-701']);
+  lib.seedSecurityPlus(content['secplus-701']);
+  assert(lib.items().some(it => it.sourceType === 'playlist' && /playlist\?list=/.test(it.url)));
+  assert.equal(lib.items().filter(it => String(it.id).indexOf('seed-secplus-') === 0).length, 5);
+  const reloaded = Lib.createLibrary({ get: () => mem.v, set: v => { mem.v = v; } });
+  assert.equal(reloaded.items().length, lib.items().length);
+
   console.log('\nALL TESTS PASSED');
 })().catch(err => { console.error('FAIL', err); process.exit(1); });

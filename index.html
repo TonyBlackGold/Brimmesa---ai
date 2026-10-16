@@ -373,6 +373,13 @@ button.ghost {
 .panel.aria, .panel.coach { margin-right: 8%; }
 .panel.feedback { background: #fff8df; }
 .view-panel[hidden] { display: none !important; }
+.view-panel label.field { display: block; margin: 8px 0 2px; font-size: 13px; color: var(--muted); }
+.view-panel select, .view-panel textarea, .view-panel input[type="text"], .view-panel input[type="file"] {
+  width: 100%; box-sizing: border-box; margin: 0 0 8px; min-height: 44px;
+  background: #0e1014; color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 16px;
+}
+#marcusAsk { display: flex; gap: 8px; margin-top: 8px; }
+#marcusAsk input { flex: 1; min-width: 0; }
 .list-card { display: block; width: 100%; text-align: left; margin: 8px 0; padding: 12px; border-radius: 16px; border: 1px solid var(--line); background: #101218; color: inherit; }
 .list-card small { display: block; color: var(--muted); margin-top: 4px; }
 .coach-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -397,7 +404,10 @@ body[data-view="map"] .menu-btn,
 body[data-view="missions"] .menu-btn,
 body[data-view="coaches"] .menu-btn,
 body[data-view="scenarios"] .menu-btn,
-body[data-view="progress"] .menu-btn { display: none !important; }
+body[data-view="progress"] .menu-btn,
+body[data-view="library"] .menu-btn { display: none !important; }
+body[data-view="library"] .shell,
+body[data-view="library"] .timeline { display: none !important; }
 @media (orientation: landscape) and (min-width: 800px) {
   .world-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(260px, .75fr); gap: 12px; align-items: start; }
   .mission-card { margin-top: 8px; }
@@ -506,6 +516,39 @@ input[type=checkbox] { width: 22px; height: 22px; }
       <h2>Scenarios</h2>
       <div id="scenarioList"></div>
     </section>
+    <section id="viewLibrary" class="view-panel" hidden>
+      <h2>Library</h2>
+      <p class="fine">Links store a title only. A static page cannot download YouTube captions (the browser blocks that). Paste or upload a transcript you are allowed to use when you want a real lesson. Nothing is sent to a Brimmesa server.</p>
+      <label class="field" for="libCoach">Coach</label>
+      <select id="libCoach"></select>
+      <label class="field" for="libUrl">YouTube video or playlist URL</label>
+      <input id="libUrl" type="text" autocomplete="off" placeholder="https://www.youtube.com/watch?v=...">
+      <button class="gold" id="libAddUrl" type="button">Add link</button>
+      <label class="field" for="libPaste">Transcript or notes</label>
+      <textarea id="libPaste" rows="4" placeholder="Paste .txt, .vtt, or .srt text"></textarea>
+      <button class="ghost" id="libAddText" type="button">Save text</button>
+      <label class="field" for="libFile">Upload transcript, notes, or Google Takeout watch history</label>
+      <input id="libFile" type="file" accept=".txt,.vtt,.srt,.json,.html,.htm,text/plain">
+      <p class="fine" id="libNote"></p>
+      <h2>Items</h2>
+      <div id="libList"></div>
+      <h2>Aria's interests</h2>
+      <p class="fine" id="libInterestLead">Upload watch-history.json or .html from one or more Google Takeout accounts. Titles are merged on this device.</p>
+      <div id="libInterests"></div>
+      <h2>Marcus · Security+</h2>
+      <p class="fine">Original Brimmesa outline. Professor Messer is a reference link only, not copied lesson text. Not affiliated with CompTIA.</p>
+      <label class="field" for="marcusObj">Objective</label>
+      <select id="marcusObj"></select>
+      <div class="dlg-actions">
+        <button class="gold" id="marcusTeach" type="button">Teach this</button>
+        <button class="ghost" id="marcusQuiz" type="button">5-question quiz</button>
+      </div>
+      <form id="marcusAsk">
+        <input id="marcusQ" autocomplete="off" placeholder="Ask Marcus about this objective">
+        <button class="gold" type="submit">Ask</button>
+      </form>
+      <div id="libraryOut" class="comic"></div>
+    </section>
     <section id="viewProgress" class="view-panel" hidden>
       <h2>Progress</h2>
       <p id="progressLead"></p>
@@ -611,6 +654,7 @@ input[type=checkbox] { width: 22px; height: 22px; }
         <span class="waves" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
       </div>
       <p id="micLabel">Tap to Talk</p>
+      <p class="hint" id="hearAria" hidden>Tap to hear Aria</p>
       <p class="hint">Press, speak, and I'll respond.</p>
     </div>
     <button class="flank" id="viewBtn" type="button"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 6h14v9H8l-3 3V6z"/></svg></span>View conversation</button>
@@ -628,6 +672,7 @@ input[type=checkbox] { width: 22px; height: 22px; }
   <button type="button" id="tabMissions">Missions</button>
   <button type="button" id="tabCoaches">Coaches</button>
   <button type="button" id="tabScenarios">Scenarios</button>
+  <button type="button" id="tabLibrary">Library</button>
   <button type="button" id="tabProgress">Progress</button>
   <button type="button" id="tabSettings">Settings</button>
   <button type="button" id="tabShop" disabled hidden>Shop</button>
@@ -696,6 +741,7 @@ input[type=checkbox] { width: 22px; height: 22px; }
 </dialog>
 
 <script src="engine.js"></script>
+<script src="library.js"></script>
 <script src="speech.js"></script>
 <script src="app.js"></script>
 <script>

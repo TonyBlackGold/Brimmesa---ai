@@ -548,7 +548,16 @@
     if (!line || line.speaker !== 'coach' || document.body.dataset.view === 'area') return line;
     return Object.assign({}, line, { speaker: 'aria' });
   }
+  let opener = '', openerHeard = false;
   function idleCaption() {
+    if (opener) {
+      $('bubbleName').textContent = 'Aria';
+      $('liveName').textContent = 'Aria';
+      $('caption').textContent = opener;
+      $('liveLine').textContent = opener;
+      if ($('ariaLine')) $('ariaLine').textContent = opener;
+      return;
+    }
     $('bubbleName').textContent = 'Aria';
     $('liveName').textContent = 'Aria';
     const text = eng.p.name
@@ -632,6 +641,14 @@
   function stopListening() { if (rec && listening) { try { rec.abort(); } catch (e) {} listening = false; $('mic').classList.remove('on'); } }
   $('mic').onclick = () => {
     unlockAudio();
+    if (!openerHeard) {
+      openerHeard = true;
+      greeted = true;
+      if ($('hearAria')) $('hearAria').hidden = true;
+      $('micLabel').textContent = 'Tap to Talk';
+      play([{ speaker: 'aria', text: opener || scriptedOpener() }]);
+      return;
+    }
     if (!greeted) {
       greeted = true;
       const line = !eng.p.name
@@ -672,15 +689,16 @@
     location.hash = hash;
   }
   function showWorld(name) {
-    const ids = { map: 'viewMap', missions: 'viewMissions', coaches: 'viewCoaches', scenarios: 'viewScenarios', progress: 'viewProgress' };
+    const ids = { map: 'viewMap', missions: 'viewMissions', coaches: 'viewCoaches', scenarios: 'viewScenarios', library: 'viewLibrary', progress: 'viewProgress' };
     document.body.dataset.view = name;
     Object.entries(ids).forEach(([key, id]) => { const node = $(id); if (node) node.hidden = key !== name; });
     document.querySelectorAll('.bottomnav button').forEach(btn => btn.classList.remove('on'));
-    const tab = { map: 'tabMap', missions: 'tabMissions', coaches: 'tabCoaches', scenarios: 'tabScenarios', progress: 'tabProgress' }[name];
+    const tab = { map: 'tabMap', missions: 'tabMissions', coaches: 'tabCoaches', scenarios: 'tabScenarios', library: 'tabLibrary', progress: 'tabProgress' }[name];
     if ($(tab)) $(tab).classList.add('on');
     if (name === 'missions') renderMissions();
     if (name === 'coaches') renderCoaches();
     if (name === 'scenarios') renderScenarios();
+    if (name === 'library') renderLibrary();
     if (name === 'progress') renderProgress();
     if (face) face.setVisible(false);
     const shell = document.querySelector('.shell');
@@ -1188,6 +1206,7 @@
   $('tabMissions').onclick = () => showWorld('missions');
   $('tabCoaches').onclick = () => showWorld('coaches');
   $('tabScenarios').onclick = () => showWorld('scenarios');
+  $('tabLibrary').onclick = () => showWorld('library');
   $('tabProgress').onclick = () => showWorld('progress');
   $('tabSettings').onclick = () => $('settingsDlg').showModal();
 
@@ -1351,6 +1370,224 @@
     if ($('progressHistory')) $('progressHistory').onclick = openHistory;
     apply();
   }
+  const lib = BrimLibrary.createLibrary({
+    get: () => localStorage.getItem('brimmesa.library.v1'),
+    set: v => localStorage.setItem('brimmesa.library.v1', v)
+  });
+  lib.seedSecurityPlus(content['secplus-701']);
+  let quiz = null;
+  function scriptedOpener() {
+    const goal = eng.p.goal ? ' Your goal is ' + eng.p.goal + '.' : '';
+    const watched = lib.interests().slice(0, 2).map(r => r.title).filter(Boolean);
+    const books = lib.items().filter(it => (it.coaches || []).indexOf('aria') >= 0 || (it.coaches || []).indexOf('shared') >= 0).slice(-2).map(it => it.title);
+    const extra = (watched.length ? ' You have been watching ' + watched.join(' and ') + '.' : '') + (books.length ? ' We can use ' + books.join(' and ') + '.' : '');
+    if (!eng.p.name) return "I'm Aria. Welcome to Brimmesa." + goal + extra + ' What should I call you?';
+    return eng.p.name + ", I'm Aria." + goal + extra + ' Pick a glowing stop, or open the library.';
+  }
+  function showOpenerText(text) {
+    opener = text;
+    if ($('hearAria')) $('hearAria').hidden = false;
+    if ($('micLabel')) $('micLabel').textContent = 'Tap to hear Aria';
+    idleCaption();
+  }
+  async function prepareOpener() {
+    let cached = '';
+    try { cached = sessionStorage.getItem('brimmesa.aria.opener') || ''; } catch (e) {}
+    showOpenerText(cached || scriptedOpener());
+    if (cached || !localStorage.getItem(GEMINI_KEY) || llm.overLimit()) return;
+    let recent = [];
+    try { recent = JSON.parse(localStorage.getItem(GEMINI_TURNS) || '[]'); } catch (e) {}
+    const prompt = [
+      'You are Aria, the warm guide for Brimmesa. One or two short spoken sentences. No markdown.',
+      'Greet from this context only. Do not invent facts. Write the brand as Brimmesa.',
+      'Name: ' + (eng.p.name || 'unknown') + '. Goal: ' + (eng.p.goal || 'none') + '.',
+      'Interests: ' + (lib.interests().slice(0, 5).map(r => r.title).join('; ') || 'none') + '.',
+      'Library: ' + (lib.items().slice(-5).map(it => it.title).join('; ') || 'none') + '.',
+      'Recent: ' + (recent.slice(-4).map(t => (t.role || '') + ' ' + (t.text || '')).join(' | ') || 'none'),
+      eng.p.name ? 'Do not ask their name.' : 'Ask what you should call them.'
+    ].join('\n');
+    try {
+      const got = await llm.generate(prompt, null);
+      const line = String(got || '').replace(/[*_`#]/g, '').replace(/\s+/g, ' ').trim().slice(0, 280);
+      if (!line || openerHeard) return;
+      try { sessionStorage.setItem('brimmesa.aria.opener', line); } catch (e) {}
+      showOpenerText(line);
+    } catch (e) {}
+  }
+  function coachLabel(id) {
+    if (id === 'shared') return 'Shared';
+    const row = cast.find(c => c.id === id);
+    return row ? row.name : id;
+  }
+  function renderLibrary() {
+    const sel = $('libCoach');
+    if (sel && !sel.childElementCount) {
+      ['shared'].concat(cast.map(c => c.id)).forEach(id => {
+        const o = document.createElement('option');
+        o.value = id; o.textContent = coachLabel(id); sel.append(o);
+      });
+    }
+    const obj = $('marcusObj');
+    if (obj && !obj.childElementCount) {
+      (content['secplus-701'].domains || []).forEach(d => {
+        const o = document.createElement('option');
+        o.value = d.id; o.textContent = d.id + ' ' + d.name; obj.append(o);
+      });
+    }
+    const list = $('libList');
+    if (!list) return;
+    const coach = sel.value;
+    list.replaceChildren();
+    lib.items().filter(it => {
+      const coaches = it.coaches || [];
+      return coach === 'shared' ? coaches.indexOf('shared') >= 0 : coaches.indexOf(coach) >= 0;
+    }).forEach(it => {
+      const row = el('article', 'list-card');
+      const del = el('button', 'ghost', 'Delete');
+      del.type = 'button';
+      del.onclick = () => { lib.remove(it.id); renderLibrary(); };
+      row.append(el('strong', null, it.title), el('small', null, it.sourceType + (it.channel ? ' · ' + it.channel : '') + (it.url ? ' · ' + it.url : '')), del);
+      list.append(row);
+    });
+    if (!list.childElementCount) list.append(el('p', 'fine', 'Nothing saved for this coach yet.'));
+    const box = $('libInterests');
+    box.replaceChildren();
+    lib.interests().slice(0, 12).forEach(r => {
+      const row = el('article', 'list-card');
+      row.append(el('strong', null, r.title), el('small', null, [r.channel, r.at].filter(Boolean).join(' · ')));
+      box.append(row);
+    });
+    if (!box.childElementCount) box.append(el('p', 'fine', 'No watch history yet.'));
+  }
+  function libPanels(lines) {
+    const box = $('libraryOut');
+    if (!box) return;
+    lines.forEach(line => {
+      const panel = el('article', 'panel ' + (line.speaker || 'marcus'));
+      panel.append(el('p', 'who', line.speaker === 'user' ? 'You' : ((chars[line.speaker] && chars[line.speaker].name) || 'Marcus')), el('p', null, line.text));
+      box.append(panel);
+    });
+    while (box.children.length > 8) box.firstChild.remove();
+  }
+  function citeLine(hit) {
+    if (!hit) return '';
+    const when = hit.start == null ? '' : ' at ' + BrimLibrary.fmtTime(hit.start);
+    return 'Source: ' + hit.title + (hit.url ? ' ' + hit.url : '') + when + '.';
+  }
+  function scriptedMarcus(hits) {
+    const useful = (hits || []).filter(h => h.sourceType !== 'playlist');
+    const bit = useful[0] ? useful[0].text : 'I only teach the Brimmesa outline saved on this device.';
+    const sentence = bit.split(/(?<=[.!?])\s/)[0];
+    return 'Listen. ' + sentence + ' ' + citeLine(useful[0] || hits[0]);
+  }
+  async function marcusSpeak(query) {
+    const hits = lib.search(query, { coach: 'marcus', limit: 3 });
+    const row = cast.find(c => c.id === 'marcus');
+    let text = scriptedMarcus(hits);
+    if (localStorage.getItem(GEMINI_KEY) && !llm.overLimit()) {
+      try {
+        const got = await llm.generate(BrimLibrary.retrievalPrompt(row, query, hits), null);
+        const clean = String(got || '').replace(/[*_`#]/g, '').replace(/\s+/g, ' ').trim().slice(0, 420);
+        if (clean) text = clean;
+      } catch (e) {}
+    }
+    const cite = citeLine((hits || []).filter(h => h.sourceType !== 'playlist')[0] || hits[0]);
+    if (cite && text.indexOf('Source:') < 0) text += ' ' + cite;
+    libPanels([{ speaker: 'marcus', text: text }]);
+    play([{ speaker: 'marcus', text: text }]);
+  }
+  function domainText(id) {
+    const dom = (content['secplus-701'].domains || []).find(d => d.id === id);
+    return dom ? dom.name : id;
+  }
+  function askQuiz() {
+    const it = quiz.items[quiz.i];
+    libPanels([{ speaker: 'marcus', text: 'Question ' + (quiz.i + 1) + ' of 5. ' + it.q }]);
+    $('marcusQ').placeholder = 'Your answer';
+  }
+  function gradeQuiz(answer) {
+    const it = quiz.items[quiz.i];
+    const t = answer.toLowerCase();
+    const ok = !/\b(don'?t know|no idea|skip|pass)\b/.test(t) && (it.accept || []).some(w => t.includes(String(w).toLowerCase()));
+    if (ok) quiz.correct++;
+    libPanels([{ speaker: 'user', text: answer }, { speaker: 'marcus', text: (ok ? 'Correct. ' : 'Not quite. ') + it.explain }]);
+    quiz.i++;
+    if (quiz.i < quiz.items.length) { askQuiz(); return; }
+    const score = Math.round(100 * quiz.correct / quiz.items.length);
+    const r = BrimEngine.awardXP(eng.p, 'library.secplus', score);
+    BrimEngine.touchStreak(eng.p, Date.now());
+    eng.p.history.unshift({ t: Date.now(), activity: 'Marcus Security+ quiz', score: score, xp: r.xp, summary: quiz.correct + ' of 5 correct.' });
+    eng.p.history = eng.p.history.slice(0, 50);
+    eng.p.lastFeedback = 'Marcus Security+ quiz: score ' + score + '. ' + quiz.correct + ' of 5.';
+    save();
+    renderStats();
+    libPanels([{ speaker: 'marcus', text: 'Quiz done. ' + quiz.correct + ' of 5. Score ' + score + '. You earned ' + r.xp + ' XP.' }]);
+    quiz = null;
+    $('marcusQ').placeholder = 'Ask Marcus about this objective';
+  }
+  if ($('libCoach')) $('libCoach').onchange = () => renderLibrary();
+  if ($('libAddUrl')) $('libAddUrl').onclick = async () => {
+    const url = $('libUrl').value.trim();
+    if (!url) return;
+    const meta = BrimLibrary.youtube(url);
+    let title = meta.sourceType === 'playlist' ? 'YouTube playlist' : 'YouTube video';
+    let channel = '';
+    if (meta.videoId) {
+      try {
+        const r = await fetch('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent(url));
+        if (r.ok) { const j = await r.json(); title = j.title || title; channel = j.author_name || ''; }
+      } catch (e) {}
+    }
+    const saved = lib.add({ coaches: [$('libCoach').value], title: title, sourceType: meta.sourceType, url: url, channel: channel, text: title + (channel ? '. Channel: ' + channel + '.' : '.') + ' Title only. No captions were fetched.', hashKey: 'url:' + url });
+    $('libNote').textContent = saved.duplicate ? 'Already saved. Not indexed again.' : 'Saved the title. Captions were not downloaded.';
+    $('libUrl').value = '';
+    renderLibrary();
+  };
+  if ($('libAddText')) $('libAddText').onclick = () => {
+    const text = $('libPaste').value.trim();
+    if (!text) return;
+    const timed = /-->/.test(text);
+    const saved = lib.add({ coaches: [$('libCoach').value], title: text.slice(0, 60), sourceType: timed ? 'transcript' : 'notes', text: text, timed: timed });
+    $('libNote').textContent = saved.duplicate ? 'Already saved. Not indexed again.' : 'Saved on this device.';
+    $('libPaste').value = '';
+    renderLibrary();
+  };
+  if ($('libFile')) $('libFile').onchange = () => {
+    const file = $('libFile').files && $('libFile').files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result || '');
+      const name = file.name.toLowerCase();
+      if (name.endsWith('.json') || name.endsWith('.html') || name.endsWith('.htm')) {
+        const merged = lib.mergeInterests(BrimLibrary.parseTakeout(text).map(r => Object.assign({ account: file.name }, r)));
+        $('libNote').textContent = 'Watch history: ' + merged.added + ' new titles, ' + merged.total + ' saved.';
+      } else {
+        const timed = name.endsWith('.vtt') || name.endsWith('.srt') || /-->/.test(text);
+        lib.add({ coaches: [$('libCoach').value], title: file.name, sourceType: timed ? 'transcript' : 'notes', text: text, timed: timed });
+        $('libNote').textContent = 'Uploaded ' + file.name + '.';
+      }
+      $('libFile').value = '';
+      renderLibrary();
+    };
+    reader.readAsText(file);
+  };
+  if ($('marcusTeach')) $('marcusTeach').onclick = () => marcusSpeak('Teach ' + domainText($('marcusObj').value) + ' for Security+ SY0-701');
+  if ($('marcusAsk')) $('marcusAsk').onsubmit = e => {
+    e.preventDefault();
+    const q = $('marcusQ').value.trim();
+    if (!q) return;
+    $('marcusQ').value = '';
+    if (quiz) { gradeQuiz(q); return; }
+    marcusSpeak(q);
+  };
+  if ($('marcusQuiz')) $('marcusQuiz').onclick = () => {
+    const items = (content['secplus-701'].items || []).slice();
+    for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = items[i]; items[i] = items[j]; items[j] = t; }
+    quiz = { items: items.slice(0, 5), i: 0, correct: 0 };
+    askQuiz();
+  };
+
   setupMap();
   showWorld('map');
 
@@ -1360,6 +1597,7 @@
   idleCaption();
   renderStats();
   applyRoute();
+  prepareOpener();
 })().catch(err => {
   const note = document.getElementById('note');
   if (note) note.textContent = 'The coach could not load. Reload the page.';
