@@ -220,11 +220,11 @@
   function failText(err) {
     const clean = errorText(err).replace(/\s+/g, ' ').trim().slice(0, 180) || 'unknown error';
     if (/webgl/i.test(clean)) return 'Still portrait: WebGL unavailable';
-    return 'model failed to load: ' + clean;
+    return 'portrait did not start: ' + clean;
   }
   function set3dStatus(text) {
     const node = $('avatarStatus');
-    if (node) node.textContent = '3D status: ' + text;
+    if (node) node.textContent = 'Portrait status: ' + text;
   }
   function refresh3dStatus() {
     if (!want3d()) { set3dStatus('off, still portrait'); return; }
@@ -242,6 +242,7 @@
       'audio ' + (d.audio || 'none')
     ];
     if (d.lost) bits.push('context lost');
+    if (d.mouth) bits.push('mouth ' + d.mouth);
     if (d.error) bits.push(d.error);
     set3dStatus(bits.join(' · '));
   }
@@ -271,12 +272,11 @@
       return Promise.resolve(null);
     }
     showRetry(false);
-    setLoading(0);
+    set3dStatus('loading portrait');
     const amara = cast.find(c => c.id === 'amara');
-    facePromise = import('./avatar/stage.js').then(mod => mod.mount($('avatarMount'), {
+    facePromise = import('./avatar/portrait.js').then(mod => mod.mount($('avatarMount'), {
       profile: amara,
-      modelUrl: amara && amara.avatarModel,
-      onProgress: (pct, phase) => setLoading(Math.round(8 + pct * 0.92), phase),
+      imageUrl: amara && amara.portrait,
       onReady: api => {
         face = api;
         faceFailed = false;
@@ -304,7 +304,7 @@
     if (box) box.checked = on;
     if (!on) { showPortrait('Still portrait · no lip sync'); showRetry(false); return; }
     showRetry(false);
-    setLoading(0);
+    set3dStatus('loading portrait');
     if (window.requestAnimationFrame) requestAnimationFrame(() => ensureFace());
     else setTimeout(() => ensureFace(), 0);
   }
@@ -1065,6 +1065,14 @@
   paintVoices();
   buildVoicePickers([]);
   $('drive').onchange = e => send(e.target.checked ? 'driving mode on' : 'driving mode off');
+  const tiltBox = $('tilt');
+  if (tiltBox) {
+    tiltBox.checked = localStorage.getItem('brimmesa.tilt') === 'on';
+    tiltBox.onchange = e => {
+      localStorage.setItem('brimmesa.tilt', e.target.checked ? 'on' : 'off');
+      if (face && face.setTilt) face.setTilt(e.target.checked);
+    };
+  }
   $('avatar3d').onchange = e => {
     localStorage.setItem('brimmesa.avatar', e.target.checked ? '3d' : 'portrait');
     if (e.target.checked) {
@@ -1095,7 +1103,7 @@
     if (node) node.replaceChildren();
     $('heroFrame').classList.remove('is-3d');
     showRetry(false);
-    setLoading(0);
+    set3dStatus('loading portrait');
     ensureFace().then(api => { if (api && document.body.dataset.view === 'home') api.setVisible(true); });
   };
   bootAvatar();

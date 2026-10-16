@@ -1,20 +1,20 @@
 # Avatars
 
-Free, in-browser, real-time characters are stylized 3D. They are not photoreal. Photoreal talking video is a paid stream, billed per minute. This page uses the free path only. No API keys.
+The homepage animates Coach Amara's own photo in the browser. It is not a generic 3D body, and it does not call a paid talking-video service. No API keys.
 
 ## What this site runs
 
-Coach Amara is a full-body CC0 GLB (MakeHuman / MPFB) drawn by [TalkingHead 1.7](https://github.com/met4citizen/TalkingHead) (MIT, Mika Suominen) and three.js r180, both from a CDN. The rig uses the same bone names TalkingHead expects (`Hips`, `LeftArm`, …), 52 ARKit blendshapes, and Oculus visemes (`viseme_PP` through `viseme_U`). Silence is the rest pose (`viseme_sil` is not a shape on this file). The mesh is a young light-skinned woman in a casual suit, with a ponytail. It does not match the painted portrait. That portrait stays underneath as the fallback.
+Coach Amara on the homepage is the existing photo, `assets/amara.webp`. A generic 3D body is not drawn there. MediaPipe Face Landmarker ran once offline and the points are saved in `avatar/landmarks/amara.json` (Apache-2.0, not shipped to the phone as a model). The browser warps that photo in WebGL: small visemes, blinks, gaze, and a little sway. Another coach can reuse `avatar/portrait.js` with her own photo and landmark file.
 
-License for `avatar/models/amara.glb`: [CC0](https://creativecommons.org/publicdomain/zero/1.0/). Upstream file and statement: [mpfb.glb](https://github.com/met4citizen/TalkingHead/blob/main/avatars/mpfb.glb), noted in the [TalkingHead readme](https://github.com/met4citizen/TalkingHead/blob/main/README.md). The copy here is Draco-compressed with WebP textures (about 6 MB) and is lazy-loaded. Morph normals were removed. It may be redistributed.
+License for `avatar/models/amara.glb`: [CC0](https://creativecommons.org/publicdomain/zero/1.0/). Upstream file and statement: [mpfb.glb](https://github.com/met4citizen/TalkingHead/blob/main/avatars/mpfb.glb), noted in the [TalkingHead readme](https://github.com/met4citizen/TalkingHead/blob/main/README.md). The copy here is Draco-compressed with WebP textures (about 6 MB). The homepage does not load it. It may be redistributed.
 
-Speech tries ElevenLabs first, then Gemini TTS, then `speechSynthesis`. ElevenLabs character timings drive the mouth. Gemini audio uses word timings. The browser voice stays text-timed, because `speechSynthesis` does not hand back audio. Blinks, saccades, breathing, and small head motion come from TalkingHead. The Draco decoder is the three.js r180 build in `avatar/draco/`. The Google hosted decoder crashed on Android (`_free is not a function`), which left the still portrait up. Reaching 100% only means the GLB bytes arrived. Draco decode, the skeleton, and morph setup run after that. The main page stays quiet while that happens. A hang or a thrown error leaves the still portrait up, and the message, including the last step, is only on the Settings `3D status` line. A successful load adds `is-3d` and hides the portrait before the first kick. Hand and nod gestures are randomized from each character's profile in `data/characters.json` (`gestureRate`, `expressiveness`, `mannerisms`, `voice`).
+Speech tries ElevenLabs first, then Gemini TTS, then `speechSynthesis`. ElevenLabs character timings drive the mouth. The shapes stay small: closed for M-B-P, a slight open, a rounded O or U, and a wider E or I, eased so the lips do not flap. The smile and teeth in the photo stay. Gemini audio uses word timings. The browser voice stays text-timed. Blinks, gaze, breathing, and a slow head-and-shoulder sway are drawn on the photo. Phone tilt is a Settings switch, off until it is turned on. If the warp cannot start, the still photo remains and the only message is the Settings portrait line.
 
 ## Character API
 
-`avatar/character.js` is the shared surface. `app.js` reaches it through `setAvatarState`.
+`avatar/portrait.js` is what the homepage mounts. `setAvatarState` still drives it. `avatar/character.js` is the earlier 3D surface and is not loaded on the hero.
 
-- `load(model)` loads a GLB URL. Only Amara has one today.
+- `mount(node, { profile })` loads that coach's photo and `avatar/landmarks/<id>.json`. Only Amara has a mesh today.
 - `speak(text | { audio, words, audible }, { emotion, rate })` plays the mouth. When `audible` is true the buffer is heard and the visemes follow its words. A text-only call keeps the mixer silent so the browser voice is the only sound.
 - `setState('idle' | 'listening' | 'speaking' | 'thinking')`
 - `interrupt()` stops the mouth. A mic tap does this and then sets listening.

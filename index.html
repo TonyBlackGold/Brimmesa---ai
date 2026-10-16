@@ -493,11 +493,12 @@ input[type=checkbox] { width: 22px; height: 22px; }
   <h3>Settings</h3>
   <label class="row"><input type="checkbox" id="drive"> Driving mode (short, audio only)</label>
   <label class="row"><input type="checkbox" id="auto" checked> Hands-free (keep listening)</label>
-  <label class="row"><input type="checkbox" id="avatar3d" checked> Animated 3D coach</label>
-  <p class="fine">Stylized 3D. With a saved key the mouth follows the spoken audio. Without one, lip sync is timed from the text. Off keeps the still portrait. Nothing is uploaded.</p>
+  <label class="row"><input type="checkbox" id="avatar3d" checked> Animated portrait</label>
+  <label class="row"><input type="checkbox" id="tilt"> Phone tilt (a little parallax)</label>
+  <p class="fine">The photo stays hers. Blinks, a small mouth, and a little sway run on this device. Off keeps the still portrait. Nothing is uploaded.</p>
   <h4>Voices</h4>
-  <p class="fine" id="avatarStatus">3D status: starting</p>
-  <button class="ghost" id="retry3d" type="button" hidden>Retry 3D</button>
+  <p class="fine" id="avatarStatus">Portrait status: starting</p>
+  <button class="ghost" id="retry3d" type="button" hidden>Retry portrait</button>
   <label class="field" for="elevenKey">ElevenLabs API key</label>
   <input id="elevenKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a key from ElevenLabs">
   <p class="fine" id="elevenStatus">No ElevenLabs key saved.</p>

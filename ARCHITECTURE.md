@@ -18,7 +18,7 @@ A provider is `{ name, enabled, respond(ctx, engine) }`. `respond` returns `[{ s
 
 Progress stays on the device under `brimmesa.profile.v1`: name, XP, level, streak, mastery, and short summaries. Microphone audio is not stored. Repeated spoken lines may be cached in IndexedDB on this device. Roadmap percentages are mastery scores, or zero when nothing has been scored.
 
-`setAvatarState('idle' | 'listening' | 'speaking' | 'thinking', { speaker, viseme })` drives the portraits and, when 3D is on, Coach Amara. See `AVATARS.md`. The 3D module is `avatar/` and loads only after first paint. The main page does not show a loading badge. A hung Draco worker or a thrown setup error leaves the still portrait in place, and the message is only on the Settings `3D status` line. A successful load reveals the canvas before the first animation kick. Speech tries ElevenLabs first when `brimmesa.eleven.key` is saved, then Gemini TTS, then the browser voice. ElevenLabs character timings drive the mouth. The still portrait remains when 3D is off or the model fails to load.
+`setAvatarState('idle' | 'listening' | 'speaking' | 'thinking', { speaker, viseme })` drives the portraits and, when 3D is on, Coach Amara. See `AVATARS.md`. The 3D module is `avatar/` and loads only after first paint. The homepage face is the coach photo, warped in the browser. The main page does not show a loading badge. If the warp cannot start, the still photo stays, and the message is only on the Settings portrait line. Speech tries ElevenLabs first when `brimmesa.eleven.key` is saved, then Gemini TTS, then the browser voice. ElevenLabs character timings drive the mouth. The still portrait remains when 3D is off or the model fails to load.
 
 ## Next phase
 
