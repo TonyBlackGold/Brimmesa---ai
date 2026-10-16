@@ -180,7 +180,7 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
     assert.equal(r[0].text, 'Area model line.');
     assert.equal(r[0].emotion, undefined);
     assert(state.calls[0].req.body.includes('Mindset'));
-    assert(state.calls[0].req.body.includes('Eight areas'));
+    assert(state.calls[0].req.body.includes('Roadmap:'));
     const plain = new Engine({ worlds, content, profile: newProfile(), areas, now: fixedNow });
     await plain.handle('mindset');
     const nudge = await plain.handle('I want a calmer evening');
@@ -570,6 +570,62 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
   assert(/Grocery spice aisle/.test(named) && /Security\+ SY0-701 lesson/.test(named));
   assert(e.p.history.every(h => !/^(spice-aisle|secplus-701|interruptions)$/.test(h.activity)));
   assert(e.p.history.some(h => h.activity === 'Grocery spice aisle'));
+  const amaraWhy = Lib.methodLine('amara', { topic: 'the magic moment' });
+  assert(/creator/i.test(amaraWhy) && /meeting/i.test(amaraWhy) && /Morning walks/.test(amaraWhy));
+  assert(!/^A claim/.test(amaraWhy));
+  const fromPitch = Lib.methodLine('amara', { heard: 'I have a pitch for a client' });
+  assert(/three hours a week/.test(fromPitch) && /skip ahead/i.test(fromPitch));
+  ['jasmine', 'renee', 'marcus'].forEach(id => {
+    const taught = Lib.methodLine(id, {});
+    assert(/why/i.test(taught) && /skip ahead/i.test(taught));
+  });
+  const Ctx = require('./context.js');
+  const turkey = Ctx.localHolidays(2026).find(h => h.name === 'Thanksgiving');
+  assert.equal(turkey.date, '2026-11-26');
+  assert.equal(Ctx.localHolidays(2026).find(h => h.name === 'Christmas').date, '2026-12-25');
+  assert.equal(Ctx.clockFrom(Date.parse('2026-11-26T18:30:00Z')).tag, 'LIVE');
+  assert.equal(Ctx.skyText(3), 'overcast');
+  assert(/skill drill/i.test(Ctx.affairsLine(null)) && /will not invent/i.test(Ctx.affairsLine(null)));
+  const sourced = Ctx.affairsLine({ source: 'Wikipedia', published: '2026-10-16', summary: 'A council vote was reported.', url: 'https://en.wikipedia.org/wiki/Example', kind: 'reporting' });
+  assert(/Reporting/.test(sourced) && /Wikipedia/.test(sourced) && /2026-10-16/.test(sourced) && /wikipedia.org/.test(sourced));
+  assert(!/weekend parking/.test(sourced));
+  const unknownPrompt = Ctx.promptFrom({ clock: Ctx.clockFrom(Date.parse('2026-10-16T15:00:00Z')), weather: { tag: 'UNKNOWN', reason: 'no location chosen' }, holidays: { tag: 'UNKNOWN' }, news: { tag: 'UNKNOWN', reason: 'not loaded' } });
+  assert(/Never invent/.test(unknownPrompt) && /WEATHER UNKNOWN/.test(unknownPrompt) && /NEWS UNKNOWN/.test(unknownPrompt));
+  const ctxMem = { v: '' };
+  let fetches = 0;
+  const live = Ctx.createContext({
+    storage: { get: () => ctxMem.v, set: v => { ctxMem.v = v; } },
+    now: () => Date.parse('2026-10-16T18:00:00Z'),
+    fetch: async (url) => {
+      fetches++;
+      const u = String(url);
+      if (u.indexOf('forecast') >= 0) return { ok: true, json: async () => ({ current: { temperature_2m: 70.2, weather_code: 2 } }) };
+      if (u.indexOf('geocoding') >= 0) return { ok: true, json: async () => ({ results: [{ name: 'Austin', admin1: 'Texas', latitude: 30.27, longitude: -97.74 }] }) };
+      if (u.indexOf('nager') >= 0) return { ok: false, json: async () => [] };
+      if (u.indexOf('wikipedia') >= 0) return { ok: true, json: async () => ({ news: [{ story: '<!--Oct 16-->A council <b>vote</b> was reported.', links: [{ content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/Example' } } }] }] }) };
+      return { ok: false, json: async () => ({}) };
+    }
+  });
+  assert.equal(live.snapshot().weather.tag, 'UNKNOWN');
+  assert(/won't guess/.test(live.answer('what is the weather')));
+  live.decline();
+  assert(/don't have the weather/.test(live.answer('what is the weather')));
+  await live.ensure({ weather: true, holidays: false, news: false });
+  assert.equal(fetches, 0);
+  ctxMem.v = '';
+  await live.useCity('Austin');
+  const snap = live.snapshot();
+  assert.equal(snap.weather.tag, 'LIVE');
+  assert(/Austin/.test(snap.weather.summary) && /Open-Meteo/.test(live.answer('what is the weather', snap)));
+  const afterCity = fetches;
+  await live.ensure({ weather: true, holidays: false, news: true });
+  const story = live.leadStory();
+  assert(story && story.kind === 'reporting' && /Example/.test(story.url) && /council vote/i.test(story.summary));
+  assert(/Reporting/.test(live.affairsLine(story)));
+  const afterNews = fetches;
+  await live.ensure({ weather: true, holidays: false, news: true });
+  assert.equal(fetches, afterNews);
+  assert(afterCity < afterNews);
   ['amara', 'jasmine', 'renee', 'marcus'].forEach(id => {
     const line = Lib.methodLine(id, {});
     assert(/skip ahead/i.test(line) && line.length > 40, id);

@@ -814,6 +814,16 @@ body:not([data-ready="1"]) #missionGo { pointer-events: none; }
   <label class="row"><input type="checkbox" id="avatar3d" checked> Animated portrait</label>
   <label class="row"><input type="checkbox" id="tilt"> Phone tilt (a little parallax)</label>
   <p class="fine">The photo stays hers. Blinks, a small mouth, and a little sway run on this device. Off keeps the still portrait. Nothing is uploaded.</p>
+  <h4>Place and time</h4>
+  <p class="fine" id="contextStatus">Weather is not loaded.</p>
+  <label class="field" for="contextCity">City</label>
+  <input id="contextCity" type="text" autocomplete="off" placeholder="City, if you want weather">
+  <div class="dlg-actions">
+    <button class="gold" id="contextCitySave" type="button">Use this city</button>
+    <button class="ghost" id="contextLocate" type="button">Use this device</button>
+    <button class="ghost" id="contextDecline" type="button">Don't use location</button>
+  </div>
+  <p class="fine">The date comes from this device. Weather comes from Open-Meteo. US holidays are computed here, and checked with Nager.Date when it answers. News, only when a coach needs it, comes from the Wikipedia current-events feed. No key is stored. A declined location stays declined.</p>
   <h4>Voices</h4>
   <p class="fine" id="avatarStatus">Portrait status: starting</p>
   <button class="ghost" id="retry3d" type="button" hidden>Retry portrait</button>
@@ -862,6 +872,7 @@ body:not([data-ready="1"]) #missionGo { pointer-events: none; }
 
 <script src="engine.js"></script>
 <script src="library.js"></script>
+<script src="context.js"></script>
 <script src="speech.js"></script>
 <script src="presenter.js"></script>
 <script src="walk.js"></script>

@@ -132,6 +132,7 @@ function overlaps(a, b) {
   assert(/amara\.webp/.test(amaraVisit.src));
   assert(/Morning walks/i.test(amaraVisit.line));
   assert(/kids wake up/i.test(amaraVisit.line));
+  assert(/creator|meeting/i.test(amaraVisit.line));
 
   await page.click('#tabCoaches');
   await page.evaluate(() => {
@@ -186,6 +187,30 @@ function overlaps(a, b) {
     assert(!overlaps(after.view, after.presenter), 'View conversation is under Amara ' + JSON.stringify(after));
     assert(!overlaps(after.type, after.presenter));
   }
+
+  await page.click('#tabMap');
+  await page.waitForSelector('.hotspot[data-dest="affairs"]');
+  await page.click('.hotspot[data-dest="affairs"]');
+  const affairs = await page.evaluate(() => ({
+    title: document.getElementById('missionTitle').textContent,
+    on: [...document.querySelectorAll('.hotspot.on')].map(n => n.dataset.dest)
+  }));
+  assert.equal(affairs.title, 'Current Affairs');
+  assert.deepEqual(affairs.on, ['affairs']);
+  await page.$eval('#missionGo', el => el.scrollIntoView({ block: 'center' }));
+  await page.click('#missionGo');
+  await page.waitForFunction(() => /skill drill|Reporting/i.test(document.getElementById('log').textContent), { timeout: 12000 });
+  const affairLog = await page.$eval('#log', n => n.textContent);
+  if (/will not invent/i.test(affairLog)) assert(/skill drill/i.test(affairLog));
+  else assert(/Reporting/i.test(affairLog) && /wikipedia/i.test(affairLog) && /https?:\/\//i.test(affairLog));
+  const ctxCheck = await page.evaluate(async () => {
+    const before = BrimContext.snapshot();
+    const denied = BrimContext.answer('what is the weather', before);
+    return { clock: before.clock.tag, holidays: before.holidays.tag, weather: before.weather.tag, denied: denied };
+  });
+  assert.equal(ctxCheck.clock, 'LIVE');
+  assert.equal(ctxCheck.holidays, 'LIVE');
+  if (ctxCheck.weather !== 'LIVE') assert(/don't have the weather|won't guess/i.test(ctxCheck.denied));
 
   console.log('AUDIT UI PASSED');
   await browser.close();

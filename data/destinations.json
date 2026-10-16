@@ -75,6 +75,14 @@
       "y": 72,
       "activityId": "travel-order",
       "blurb": "Order something and ask the way."
+    },
+    {
+      "id": "affairs",
+      "title": "Current Affairs",
+      "x": 64,
+      "y": 36,
+      "activityId": "current-affairs",
+      "blurb": "A real story, or a skill drill if the feed is quiet."
     }
   ]
 }

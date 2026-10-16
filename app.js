@@ -108,7 +108,8 @@
   const BLURB = {
     'spice-aisle': 'Two people in the aisle. Practice a warm, respectful conversation.',
     interruptions: 'Marcus cuts in. Hold your point without heat.',
-    'secplus-701': 'Original Security+ practice. Not an official exam.'
+    'secplus-701': 'Original Security+ practice. Not an official exam.',
+    'current-affairs': 'A fetched story, or a skill drill if the feed is quiet.'
   };
   const ICONS = {
     mindset: '<svg viewBox="0 0 24 24" fill="none" stroke="#e0b65a" stroke-width="1.6"><circle cx="12" cy="12" r="8"/><path d="M8 13c1-2 2-3 4-3s3 1 4 3"/><path d="M9 10h.01M15 10h.01"/></svg>',
@@ -118,7 +119,8 @@
     relationships: '<svg viewBox="0 0 24 24" fill="none" stroke="#e0b65a" stroke-width="1.6"><circle cx="8" cy="9" r="2.2"/><circle cx="16" cy="9" r="2.2"/><path d="M4 18c.6-2.4 2.4-3.5 4-3.5S11.4 15.6 12 18c.6-2.4 2.4-3.5 4-3.5s3.4 1.1 4 3.5"/></svg>',
     estate: '<svg viewBox="0 0 24 24" fill="none" stroke="#e0b65a" stroke-width="1.6"><path d="M4 20V10l8-6 8 6v10"/><path d="M10 20v-6h4v6"/></svg>',
     lifestyle: '<svg viewBox="0 0 24 24" fill="none" stroke="#e0b65a" stroke-width="1.6"><path d="M3 16l9-6 9 4-4 2"/><path d="M12 10V4"/><path d="M8 20h8"/></svg>',
-    spirit: '<svg viewBox="0 0 24 24" fill="none" stroke="#e0b65a" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg>'
+    spirit: '<svg viewBox="0 0 24 24" fill="none" stroke="#e0b65a" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg>',
+    affairs: '<svg viewBox="0 0 24 24" fill="none" stroke="#e0b65a" stroke-width="1.6"><path d="M5 5h10a4 4 0 0 1 4 4v10H9a4 4 0 0 1-4-4V5z"/><path d="M8 9h6M8 13h4"/></svg>'
   };
 
   function el(tag, cls, text) {
@@ -711,7 +713,12 @@
       if (emotion && face) face.react(emotion);
     } catch (e) {}
     setAvatarState('thinking', { speaker: 'coach' });
+    if (!eng.act && !quiz && !loopRun && window.BrimContext && BrimContext.asks(value)) {
+      const factual = await factualReply(value);
+      if (factual) { play([{ speaker: 'aria', text: factual }]); return; }
+    }
     const lines = await eng.handle(value);
+    if (eng.act && eng.act.id === 'current-affairs' && eng.s && eng.s.turn === 0) await dressAffairs(lines);
     if (eng.act) {
       const coachId = coachForActivity(eng.act);
       eng.activeCoach = coachId;
@@ -902,7 +909,38 @@
     bindCoach(coachId, a.title);
     show({ speaker: 'user', text: a.title });
     showHome();
-    play(eng.start(a));
+    const lines = eng.start(a);
+    if (a.id === 'current-affairs') { dressAffairs(lines).then(play); return; }
+    play(lines);
+  }
+  async function dressAffairs(lines) {
+    let snap = window.BrimContext ? BrimContext.snapshot() : null;
+    if (window.BrimContext) {
+      try { snap = await BrimContext.ensure({ news: true }); } catch (e) {}
+      eng.liveBrief = BrimContext.prompt();
+    }
+    const story = window.BrimContext ? BrimContext.leadStory(snap) : null;
+    if (eng.s) eng.s.story = story;
+    if (lines && lines[0]) lines[0] = { speaker: 'renee', text: BrimContext.affairsLine(story) };
+    return lines;
+  }
+  async function factualReply(value) {
+    if (!window.BrimContext || !BrimContext.asks(value)) return '';
+    let snap = BrimContext.snapshot();
+    if (BrimContext.asksNews(value)) {
+      try { snap = await BrimContext.ensure({ news: true }); } catch (e) {}
+    }
+    eng.liveBrief = BrimContext.prompt();
+    return BrimContext.answer(value, snap) || '';
+  }
+  function paintContext(snap) {
+    const node = $('contextStatus');
+    if (!node || !snap) return;
+    const w = snap.weather || {};
+    node.textContent = w.tag === 'LIVE'
+      ? 'Weather: ' + w.summary + '. ' + (w.source || 'Open-Meteo') + '.'
+      : 'Weather: not loaded' + (w.reason ? ' (' + w.reason + ')' : '') + '.';
+    if (snap.holidays && snap.holidays.today) node.textContent += ' Today: ' + snap.holidays.today + '.';
   }
   function launchArea(id) {
     const area = areas.find(a => a.id === id);
@@ -1200,7 +1238,15 @@
     $('dlg').close();
     showHome();
   };
-  $('settingsBtn').onclick = () => { paintGemini(); paintVoices(); loadElevenVoices(); $('settingsDlg').showModal(); };
+  let contextAsideUsed = false;
+  function openSettings() {
+    paintGemini();
+    paintVoices();
+    loadElevenVoices();
+    if (window.BrimContext) paintContext(BrimContext.snapshot());
+    $('settingsDlg').showModal();
+  }
+  $('settingsBtn').onclick = openSettings;
   $('settingsClose').onclick = () => $('settingsDlg').close();
   $('geminiSave').onclick = () => {
     const typed = ($('geminiKey').value || '').trim();
@@ -1348,12 +1394,41 @@
   $('tabScenarios').onclick = () => showWorld('scenarios');
   $('tabLibrary').onclick = () => showWorld('library');
   $('tabProgress').onclick = () => showWorld('progress');
-  $('tabSettings').onclick = () => $('settingsDlg').showModal();
+  $('tabSettings').onclick = () => openSettings();
+  if ($('contextCitySave')) $('contextCitySave').onclick = async () => {
+    const city = ($('contextCity').value || '').trim();
+    if (!city || !window.BrimContext) return;
+    if ($('contextStatus')) $('contextStatus').textContent = 'Looking up ' + city + '.';
+    try {
+      const snap = await BrimContext.useCity(city);
+      eng.liveBrief = BrimContext.prompt();
+      paintContext(snap);
+    } catch (e) {
+      if ($('contextStatus')) $('contextStatus').textContent = "I could not find that city. Weather stays unloaded.";
+    }
+  };
+  if ($('contextLocate')) $('contextLocate').onclick = async () => {
+    if (!window.BrimContext) return;
+    if ($('contextStatus')) $('contextStatus').textContent = 'Asking this device for a location.';
+    try {
+      const snap = await BrimContext.useDevice();
+      eng.liveBrief = BrimContext.prompt();
+      paintContext(snap);
+    } catch (e) {
+      if ($('contextStatus')) $('contextStatus').textContent = 'This device did not share a location. You can type a city or decline.';
+    }
+  };
+  if ($('contextDecline')) $('contextDecline').onclick = () => {
+    if (!window.BrimContext) return;
+    const snap = BrimContext.decline();
+    eng.liveBrief = BrimContext.prompt();
+    paintContext(snap);
+  };
 
   function missionFor(id) { return (eng.p.missions || {})[id] || null; }
   let selectedDestId = null;
-  const AREA_DEST = { mindset: 'mindset', health: 'health', career: 'career', business: 'wealth', relationships: 'relationships', lifestyle: 'lifestyle', estate: 'wealth', spirit: 'mindset' };
-  const DEST_COACH = { skills: 'marcus', career: 'marcus', mindset: 'amara', wealth: 'amara', relationships: 'jasmine', lifestyle: 'renee', travel: 'renee', health: 'amara', central: 'aria' };
+  const AREA_DEST = { mindset: 'mindset', health: 'health', career: 'career', business: 'wealth', relationships: 'relationships', lifestyle: 'lifestyle', estate: 'wealth', spirit: 'mindset', affairs: 'affairs' };
+  const DEST_COACH = { skills: 'marcus', career: 'marcus', mindset: 'amara', wealth: 'amara', relationships: 'jasmine', lifestyle: 'renee', travel: 'renee', health: 'amara', central: 'aria', affairs: 'renee' };
   function renderMission() {
     const title = $('missionTitle');
     if (!title) return;
@@ -2026,11 +2101,16 @@
   }
   function guestOpen(coach, handoff) {
     if (hostSession) hostSession.teachStep = 'invite';
-    return BrimLibrary.methodLine(coach.id, {
+    const line = BrimLibrary.methodLine(coach.id, {
       topic: handoff.topic,
       goal: handoff.goal,
+      heard: handoff.userLine,
       experienced: experienceFor(coach.id) === 'experienced'
     });
+    const aside = window.BrimContext ? BrimContext.aside() : '';
+    if (!aside || contextAsideUsed) return line;
+    contextAsideUsed = true;
+    return aside + ' ' + line;
   }
   async function returnToAria() {
     const topic = (hostSession && (hostSession.topic || hostSession.lastTopic)) || '';
@@ -2180,7 +2260,10 @@
             'You are ' + coach.name + '. Personality: ' + coach.personality,
             coach.styleNote ? 'Style note: ' + coach.styleNote : '',
             'Shared method when you are teaching: welcome, explain, demonstrate, invite, coach, encourage.',
+            'Teach what the skill is, why a real person needs it, when they use it, and how. One example from their words when they gave you any. Natural transition, then the invite.',
             'Answer the question they actually asked. Do not substitute a different topic.',
+            'Do not invent weather, a date, a holiday, or a news event.',
+            window.BrimContext ? BrimContext.prompt() : '',
             'Beginners get the explanation and one example. Experienced people may skip ahead.',
             'Not every turn is a lesson. Answer questions, humor, and tangents in your own voice.',
             'Never demand an exercise before you have explained it.',
@@ -2201,6 +2284,8 @@
   }
   async function coachTurn(value) {
     if (hostSession) hostSession.lastExchange = String(value || '').slice(0, 160);
+    const factual = await factualReply(value);
+    if (factual && hostSession) { await play([{ speaker: hostSession.coachId, text: factual }]); return; }
     if (hostSession && hostSession.coachId === 'marcus') return marcusTurn(value);
     return guestTurn(value);
   }
@@ -2302,6 +2387,13 @@
   applyRoute();
   await loadAdminLibrary();
   document.body.dataset.ready = '1';
+  if (window.BrimContext) {
+    eng.liveBrief = BrimContext.prompt();
+    BrimContext.ensure({ news: false }).then(snap => {
+      eng.liveBrief = BrimContext.prompt();
+      paintContext(snap);
+    }).catch(() => {});
+  }
   prepareOpener();
 })().catch(err => {
   const note = document.getElementById('note');

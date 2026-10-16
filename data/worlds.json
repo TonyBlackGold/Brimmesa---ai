@@ -165,6 +165,18 @@
             "travel practice"
           ],
           "driving": true
+        },
+        {
+          "id": "current-affairs",
+          "type": "scenario",
+          "file": "data/scenarios/current-affairs.json",
+          "title": "Current Affairs",
+          "keywords": [
+            "current affairs",
+            "news drill",
+            "fact and opinion"
+          ],
+          "driving": true
         }
       ]
     }

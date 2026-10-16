@@ -423,6 +423,11 @@
       const manners = (row.mannerisms || []).join(', ');
       return (row.name || id) + ' (' + (row.role || 'coach') + '): ' + (row.personality || '') + (manners ? ' Mannerisms: ' + manners + '.' : '');
     },
+    liveBlock(eng) {
+      const text = eng && eng.liveBrief;
+      if (!text) return 'No live context was loaded. Do not invent weather, the date, a holiday, or a news event. If they ask, say you do not have it.';
+      return text;
+    },
     lengthRule(eng) {
       const brand = 'Write the brand as Brimmesa, in mixed case, never in all capitals.';
       const pace = eng && eng.p && eng.p.driving
@@ -436,7 +441,7 @@
       const here = eng && eng.area
         ? 'Current area: ' + eng.area.title + '. ' + (eng.area.intro || '') + ' If they stall: ' + (eng.area.nudge || '')
         : 'No roadmap area is open.';
-      return here + (list ? ' Eight areas: ' + list + '.' : '');
+      return here + (list ? ' Roadmap: ' + list + '.' : '');
     },
     progressBlock(eng) {
       const summary = eng.progressSummary();
@@ -665,8 +670,10 @@
         const who = eng.activeCoach || 'marcus';
         const prompt = [
           this.persona(who),
-          'Shared method, in your own voice: welcome, explain, demonstrate, invite, coach, encourage.',
+          'Shared method, in your own voice: welcome, explain, demonstrate, invite, coach, encourage. Say what the skill is, why it matters, when to use it, and how.',
           'Security+ tutor. The app already graded this answer against the original question. Do not rewrite the question, do not change the verdict, and do not invent a new item.',
+          'Do not invent weather, a date, a holiday, or a news event.',
+          this.liveBlock(eng),
           'Answer only the question that was just graded. Do not explain a different concept.',
           graded ? 'Graded question: ' + graded.q : '',
           graded ? 'Explanation that belongs to that question: ' + graded.explain : '',
@@ -718,8 +725,10 @@
           'Adults only. Respectful life coaching. No sexual content, no pressure, no appearance ratings, no contact details.',
           this.persona(who),
           'Shared method, in your own voice: welcome, explain, demonstrate, invite, coach, encourage. Beginners get the explanation and one example before you invite them to try. Do not open by demanding an exercise.',
+          'Teach what the skill is, why a real person needs it, when they use it, and how. One natural transition. If they already spoke, build the example from their words.',
           'Answer the question they actually asked. Do not repeat a generic explanation of a different topic.',
           'Speak only as coach. If they want a scored activity, suggest social, communication, or Security plus.',
+          this.liveBlock(eng),
           this.lengthRule(eng),
           'Return JSON {"lines":[{"speaker":"coach","text":"...","emotion":"smile"}]}. emotion is smile, concern, laugh, or surprise.',
           this.areaContext(eng),

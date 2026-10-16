@@ -111,6 +111,7 @@
       'Personality, separate from the notes: ' + (who.personality || ''),
       'Explain in your own words and your own slang. Never paste long verbatim source text. A short phrase at most.',
       'Shared method, in your own voice: welcome, explain, demonstrate, invite, coach, encourage. Beginners get the explanation and one example. Experienced people may skip ahead. Questions, humor, and tangents are allowed. Not every turn is a lesson.',
+      'When you teach, say what the skill is, why a real person needs it, when they use it, and how, with one natural transition. One example. If they already said something, build the example from their words. Do not invent weather, a date, a holiday, or a news event. If live context is tagged UNKNOWN, say you do not have that fact.',
       (who.styleNote ? 'Style note: ' + who.styleNote : ''),
       cite
         ? 'Cite each source you use as its title, link, and timestamp when you have them.'
@@ -439,28 +440,57 @@
     { id: 'coach', label: 'Coach' },
     { id: 'encourage', label: 'Encourage' }
   ];
+  function pickLine(list, salt) {
+    let n = 0;
+    const s = String(salt || '');
+    for (let i = 0; i < s.length; i++) n = (n + s.charCodeAt(i)) % list.length;
+    return list[n] || list[0];
+  }
+  function amaraExample(heard) {
+    const t = String(heard || '').toLowerCase();
+    if (/\b(youtube|video|channel|audience|creator)\b/.test(t)) return 'For example, claim: This video is for people who freeze on camera. Reason: I used to restart the same intro four times.';
+    if (/\b(meet|pitch|business|client|investor|deal)\b/.test(t)) return 'For example, claim: The pilot saves the team three hours a week. Reason: They stop copying the same numbers by hand.';
+    if (/\b(kid|child|family|morning|walk)\b/.test(t)) return 'For example, claim: Morning walks make my whole day better. Reason: They clear my head before the kids wake up.';
+    return 'For example, claim: Morning walks make my whole day better. Reason: They clear my head before the kids wake up.';
+  }
   function methodLine(coachId, opts) {
     const o = opts || {};
     const topic = o.topic ? ' You wanted ' + o.topic + '.' : '';
     const goal = o.goal ? ' Your goal: ' + o.goal + '.' : '';
     const experienced = !!o.experienced;
+    const salt = (o.topic || '') + '|' + (o.goal || '');
     if (coachId === 'amara') {
-      if (experienced) return "Aria sent you over. I'm Amara." + topic + " You already know this. A claim is the point. A reason is why it is true for you. Skip ahead: say both to a skeptical friend. Or stay and we'll do one clean pass.";
-      return "Aria sent you over. I'm Amara. I help you say what you mean so another person could repeat it." + topic + goal + " A claim is the point, in one plain sentence. A reason is why that point is true for you. For example, claim: Morning walks make my whole day better. Reason: They clear my head before the kids wake up. If you want, try one of your own. Or tell me what's actually on your mind. You can skip ahead if this is already easy.";
+      if (experienced) return "I'm Amara." + topic + " You already do this in the wild. A claim is the point. A reason is why it is true for you. Skip ahead: say both about the thing you walked in with.";
+      const hello = pickLine([
+        "Hey. I'm Amara. Glad you sat down.",
+        "I'm Amara. Come in, no rush.",
+        "Hey. Amara here. How is the day actually going?"
+      ], salt);
+      return hello + topic + goal + " People trust a message they can repeat. A creator needs one line the audience remembers, and a meeting needs that same line before anyone asks for the money. That is why we practice it: a claim is the point, in one plain sentence, and a reason is why that point is true for you. " + amaraExample(o.heard) + " If you want, try one from your own week. Or tell me what is on your mind. You can skip ahead if this is already easy.";
     }
     if (coachId === 'jasmine') {
-      if (experienced) return "Aria introduced you. I'm Jasmine." + topic + " You can skip ahead. Tell the scene to a friend who was not there, with one joke that still respects them.";
-      return "Aria introduced you. I'm Jasmine. I help you turn a point into a scene a friend could retell." + topic + " The exercise is a tiny story, because a story sticks. For example: I saw them holding the paprika and I said it looked dangerous in the best way. Your turn, in your own words. Or just talk. You can skip ahead.";
+      if (experienced) return "I'm Jasmine." + topic + " Skip ahead if you want. Tell the scene to a friend who was not there, with one joke that still respects them.";
+      const hello = pickLine([
+        "Hey. I'm Jasmine. Pull up a chair.",
+        "I'm Jasmine. You look like you have a story already.",
+        "Hey. Jasmine. What just happened out there?"
+      ], salt);
+      return hello + topic + " A point dies if nobody can retell it. That is why a tiny scene helps on a date, with a friend, or in a room that was not there for the moment. For example: I saw them holding the paprika and I said it looked dangerous in the best way. Your turn, in your own words. Or just talk. You can skip ahead.";
     }
     if (coachId === 'renee') {
-      if (experienced) return "Aria pointed you here. I'm Renee." + topic + " Skip ahead if you want. Name who was left out, and say the line again for them.";
-      return "Aria pointed you here. I'm Renee. I help you notice who is actually in the room." + topic + " The exercise is to name the listener before you pick the words, because the words change. For example: the claim is that you want a plan for the weekend. The reason is that someone was left looking at their phone. Try yours. Or ask me something else. You can skip ahead.";
+      if (experienced) return "I'm Renee." + topic + " Skip ahead if you want. Name who was left out, and say the line again for them.";
+      const hello = pickLine([
+        "I'm Renee. Good, you're here.",
+        "Hey. Renee. Take a second before you start.",
+        "I'm Renee. Who else is in this with you?"
+      ], salt);
+      return hello + topic + " The same sentence lands differently once you know who is listening. That is why we name the listener first, at a table, in a group, or when someone was left on their phone. For example: the point is that you want a plan for the weekend. The reason is that someone was left looking at their phone. Try yours. Or ask me something else. You can skip ahead.";
     }
     if (coachId === 'marcus') {
       if (experienced) return "Marcus." + topic + " You can skip ahead. Say quiz, or say challenge if you want the harder set.";
-      return "Marcus. Security+, Network+, CySA+, that lane." + topic + " I ask what you know so I don't start you in the wrong room. A straight answer sounds like: I can explain the CIA triad, and phishing is still fuzzy. What do you already know? Say it plain. You can skip ahead if you want the harder set.";
+      return "Marcus." + topic + " I will not start you in the wrong room. That is why I ask what you already know before a quiz or a challenge. It saves the hour. A straight answer sounds like: I can explain the CIA triad, and phishing is still fuzzy. What do you already know? Say it plain. You can skip ahead if you want the harder set.";
     }
-    return "I'm glad you are here." + topic + " Tell me what you want to practice. You can skip ahead.";
+    return "I'm glad you are here." + topic + " Tell me what you want to practice, and why it matters this week. You can skip ahead.";
   }
   function methodReply(coachId, text, opts) {
     const o = opts || {};
@@ -485,10 +515,10 @@
       if (coachId === 'amara') return "Let me say this in plain words. " + body + " It matters the next time you have to say something hard out loud. Try it in your own words, or tell me what's on your mind. You can skip ahead.";
       return body;
     }
-    if (coachId === 'amara') return "I heard you. The strong part is that you said it in your own words. If the reason is still thin, add why it is true for you, the way the morning walk clears your head. That is progress. Want another try, or a harder one?";
-    if (coachId === 'jasmine') return "That scene lands. " + bit + " Now retell it to a friend who was not there. You're getting warmer.";
-    if (coachId === 'renee') return "I heard it. " + bit + " Check who was in the room and whether they could repeat it. Then take the next step.";
-    if (coachId === 'marcus') return "Noted. " + bit + " Say the harder version, or say quiz.";
+    if (coachId === 'amara') return "I heard you. " + bit + " That is the shape people can repeat: the point, then why it is true for you, the way a morning walk clears your head before the kids wake up. That is progress. Want to tighten the reason, or try it on a harder listener?";
+    if (coachId === 'jasmine') return "That scene lands. " + bit + " A scene is how the point survives when they were not in the room. Retell it once, shorter. You're getting warmer.";
+    if (coachId === 'renee') return "I heard it. " + bit + " The words change once you name who has to live with them. Say who was in the room, then the line again.";
+    if (coachId === 'marcus') return "Noted. " + bit + " That tells me where to start, which is why I asked. Say the harder version, or say quiz.";
     return "I heard you. " + bit + " Take the next step.";
   }
   const HOSTS = [

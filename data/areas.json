@@ -136,6 +136,23 @@
         { "prompt": "What practice, however small, will you keep tomorrow?", "reply": "Small and kept beats grand and imagined." }
       ],
       "coming": ["Purpose reviews", "Weekly examen"]
+    },
+    {
+      "id": "affairs",
+      "title": "Current Affairs",
+      "summary": "Fact, opinion, and the missing view.",
+      "icon": "affairs",
+      "keywords": ["current affairs", "news drill", "fact and opinion"],
+      "activityIds": ["current-affairs"],
+      "skill": "affairs.media",
+      "intro": "Current affairs. We practice on a story this device actually fetched. If the feed is quiet, I say so and we drill the skill. I will not invent a headline.",
+      "nudge": "Start Current Affairs, or name another area.",
+      "reflections": [
+        { "prompt": "What is one sentence you heard this week that mixed a fact with a judgment?", "reply": "Good. Split them. The fact can stay. The judgment needs a label." },
+        { "prompt": "Who was not in that sentence, and what might they have cared about?", "reply": "That missing person is the other perspective. Keep them in the room." },
+        { "prompt": "What would you need from a source before you repeated the story?", "reply": "A source and a date. Without those, it is not ready to repeat." }
+      ],
+      "coming": []
     }
   ]
 }

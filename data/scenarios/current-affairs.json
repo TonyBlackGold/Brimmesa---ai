@@ -1,0 +1,77 @@
+{
+  "id": "current-affairs",
+  "skill": "affairs.media",
+  "feedbackLabel": "the current affairs conversation",
+  "setting": "Renee will use a story this device actually fetched. If the feed is quiet, she says so and runs a skill drill. She will not invent a headline.",
+  "sceneNote": "Adults only. Respectful practice. No sexual content, no invented news, no pressure. Renee hosts. She labels reporting versus opinion. She asks for another perspective. She keeps it conversational.",
+  "characters": [
+    {
+      "id": "renee",
+      "name": "Renee",
+      "trait": "poised, curious, precise",
+      "voice": { "pitch": 0.92, "rate": 0.98, "index": 2 }
+    }
+  ],
+  "maxTurns": 4,
+  "signals": {
+    "greeting": ["hi", "hello", "hey", "good morning", "good afternoon"],
+    "context": ["fact", "reported", "reporting", "source", "according", "wikipedia", "article"],
+    "question": ["?", "what", "how", "which", "who", "why"],
+    "intro": ["opinion", "i think", "judgment", "judge", "should", "believe"],
+    "humor": ["honestly", "funny", "fair", "between us"],
+    "inclusive": ["perspective", "missing", "other side", "who else", "left out", "their view"],
+    "pushy": ["idiot", "stupid", "moron", "shut up", "fake news you"],
+    "exit": ["thanks", "thank you", "goodbye", "bye", "that is enough", "we're good", "were good"]
+  },
+  "responses": {
+    "open_good": [
+      { "speaker": "renee", "text": "Good. Say the reported fact in one sentence, and leave your opinion out of that sentence." }
+    ],
+    "open_flat": [
+      { "speaker": "renee", "text": "Start with what was reported. If this is the skill drill, stay on that parking sentence. Do not add a story I did not give you." }
+    ],
+    "context": [
+      { "speaker": "renee", "text": "That is the reporting. If the next sentence says what should happen, call it opinion out loud." }
+    ],
+    "question": [
+      { "speaker": "renee", "text": "Answer from the story we have. If the source did not say it, say that. Do not fill the hole." }
+    ],
+    "humor": [
+      { "speaker": "renee", "text": "Keep it light. Still mark which sentence is a fact and which one is a take." }
+    ],
+    "intro": [
+      { "speaker": "renee", "text": "You labeled a judgment. Now test it. What would have to be true for that opinion to hold?" }
+    ],
+    "inclusive": [
+      { "speaker": "renee", "text": "Who is missing? Name one perspective the sentence left out, and what they might say." }
+    ],
+    "pushy": [
+      { "speaker": "renee", "text": "We do not shout a story into being true. Slow down and label the sentence." }
+    ],
+    "neutral": [
+      { "speaker": "renee", "text": "One more pass. Fact, then opinion, then who is missing. Keep the source in the room." }
+    ],
+    "exit": [
+      { "speaker": "renee", "text": "That is a clean read. You kept the source, the fact, and the label." }
+    ],
+    "timeout": [
+      { "speaker": "renee", "text": "We can stop. Next time it is the same skill: source, fact, opinion, missing view." }
+    ]
+  },
+  "rubric": [
+    { "id": "greeting", "label": "Warm opener", "points": 10, "tip": "Start like a person, then get to the story." },
+    { "id": "context", "label": "Stayed with the reported fact", "points": 25, "tip": "Say the fact that was actually in the source." },
+    { "id": "intro", "label": "Labeled an opinion", "points": 20, "tip": "Call a judgment an opinion instead of smuggling it in as news." },
+    { "id": "question", "label": "Checked the source", "points": 15, "tip": "Ask what the story did not say." },
+    { "id": "inclusive", "label": "Named another perspective", "points": 20, "tip": "Name who was left out and what they might care about." },
+    { "id": "exit", "label": "Clean close", "points": 10, "tip": "End once the fact and the label are clear." }
+  ],
+  "penalties": [
+    { "id": "pushy", "label": "Insult instead of a reading", "points": 30, "tip": "Drop the insult. Label the sentence." }
+  ],
+  "dimensions": [
+    { "label": "Clarity", "signals": ["context", "intro"] },
+    { "label": "Confidence", "signals": ["greeting", "question", "exit"] },
+    { "label": "Warmth", "signals": ["inclusive", "humor"] }
+  ]
+}
