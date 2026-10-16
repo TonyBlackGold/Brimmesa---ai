@@ -480,6 +480,22 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
   assert(!Lib.challenge('marcus-phish', ['marcus-cia']).locked);
   const kept = Lib.readScores('nope', shaky);
   assert.equal(kept.source, 'script');
+  const intent = Lib.keywordIntent("Aria, I'd like to talk to Marcus about Security+");
+  assert(intent && intent.coachId === 'marcus' && /security/.test(intent.topic) && intent.dest === 'skills');
+  assert.equal(Lib.keywordIntent('talk to Amara about my goal').coachId, 'amara');
+  assert.equal(Lib.keywordIntent('introduce me to Jasmine').dest, 'relationships');
+  assert.equal(Lib.keywordIntent('chat with Renee about small talk').coachId, 'renee');
+  assert.equal(Lib.keywordIntent('the spice aisle is busy'), null);
+  const manifest = JSON.parse(fs.readFileSync('data/library/manifest.json', 'utf8'));
+  const shelf = JSON.parse(fs.readFileSync(manifest.files[0], 'utf8'));
+  const admin = Lib.createLibrary({ get: () => null, set: () => {} });
+  const imported = admin.importAdmin(shelf.items[0]);
+  const repeat = admin.importAdmin(shelf.items[0]);
+  assert(!imported.duplicate && repeat.duplicate && imported.item.attribution && imported.item.chunks.length === 1);
+  const edited = Object.assign({}, shelf.items[0], { chunks: [{ id: 'c0', text: 'Updated original note.', start: null }] });
+  const replaced = admin.importAdmin(edited);
+  assert(replaced.updated && replaced.item.chunks[0].text === 'Updated original note.');
+  assert(admin.importAdmin(edited).duplicate);
 
   console.log('\nALL TESTS PASSED');
 })().catch(err => { console.error('FAIL', err); process.exit(1); });

@@ -25,10 +25,11 @@
   const palette = ['#e0b65a', '#d7a15a', '#c4b49a', '#8d6428'];
   Object.values(content).forEach(c => (c.characters || []).forEach((ch, i) => chars[ch.id] = { ...ch, color: palette[(ch.voice.index || i) % palette.length] }));
   const portraitOf = speaker => {
-    const row = cast.find(c => c.speakerId === speaker || (speaker === 'coach' && c.id === 'amara'));
+    const row = cast.find(c => c.id === speaker || c.speakerId === speaker || (speaker === 'coach' && c.id === 'amara'));
     return row && row.portrait;
   };
   cast.forEach(c => {
+    chars[c.id] = Object.assign({}, chars[c.id] || {}, c, { color: (chars[c.id] && chars[c.id].color) || '#e0b65a' });
     if (c.speakerId) chars[c.speakerId] = Object.assign({}, chars[c.speakerId] || {}, c, { color: (chars[c.speakerId] && chars[c.speakerId].color) || '#e0b65a' });
     document.querySelectorAll('[data-portrait="' + c.id + '"]').forEach(img => { img.src = c.portrait; });
   });
@@ -330,7 +331,7 @@
   if (synth) { loadVoices(); synth.onvoiceschanged = loadVoices; setTimeout(loadVoices, 500); setTimeout(loadVoices, 2000); }
   const castOrder = ['coach', 'jasmine', 'renee', 'marcus'];
   function profileFor(id) {
-    return cast.find(c => c.speakerId === id || (id === 'coach' && c.id === 'amara')) || null;
+    return cast.find(c => c.id === id || c.speakerId === id || (id === 'coach' && c.id === 'amara')) || null;
   }
   function voiceCfg(id) {
     const base = (chars[id] || chars.coach).voice || {};
@@ -525,6 +526,8 @@
     $('log').append(d);
     $('log').scrollTop = 1e9;
     pushComic(line);
+    spokenRecent.push({ speaker: line.speaker, text: String(line.text || '').slice(0, 160) });
+    if (spokenRecent.length > 8) spokenRecent.shift();
   }
   function pushComic(line) {
     const box = $('comic');
@@ -542,13 +545,15 @@
     $('caption').textContent = line.text;
     $('liveName').textContent = name;
     $('liveLine').textContent = line.text;
-    if ($('ariaLine') && line.speaker !== 'user') $('ariaLine').textContent = line.text;
+    if ($('ariaLine') && (line.speaker === 'aria' || (!hostSession && line.speaker !== 'user'))) $('ariaLine').textContent = line.text;
+    if (hostSession && line.speaker !== 'user' && line.speaker !== 'aria' && $('visitLine')) $('visitLine').textContent = line.text;
   }
   function present(line) {
     if (!line || line.speaker !== 'coach' || document.body.dataset.view === 'area') return line;
     return Object.assign({}, line, { speaker: 'aria' });
   }
-  let opener = '', openerHeard = false, loopRun = null;
+  let opener = '', openerHeard = false, loopRun = null, hostSession = null, hostLock = false;
+  const spokenRecent = [];
   function idleCaption() {
     if (opener) {
       $('bubbleName').textContent = 'Aria';
@@ -584,7 +589,7 @@
     setAvatarState('idle', { speaker: 'coach' });
     busy = false;
     save();
-    if ($('auto').checked && rec && !loopRun && lines && lines.length && document.visibilityState === 'visible') setTimeout(listen, 250);
+    if ($('auto').checked && rec && !loopRun && !hostLock && lines && lines.length && document.visibilityState === 'visible') setTimeout(listen, 250);
   }
   async function send(text) {
     const value = (text || '').trim();
@@ -598,6 +603,13 @@
     interrupt();
     show({ speaker: 'user', text: value });
     if (loopRun && loopRun.waiting) { await continueLoop(value); return; }
+    if (quiz && (!hostSession || hostSession.coachId === 'marcus')) { await gradeQuiz(value); return; }
+    if (hostSession && wantsAria(value) && !eng.act) { await returnToAria(); return; }
+    if (hostSession && !eng.act && !loopRun) { await coachTurn(value); return; }
+    if (!eng.act && (eng.mode === 'menu' || eng.mode === 'askname' || eng.mode === 'area')) {
+      const intent = await detectIntent(value);
+      if (intent) { await beginHandoff(intent, value); return; }
+    }
     try {
       const emotion = (await import('./avatar/lipsync.js')).emotionFromText(value);
       if (emotion && face) face.react(emotion);
@@ -1184,6 +1196,7 @@
     ensureFace().then(api => { if (api && document.body.dataset.view === 'home') api.setVisible(true); });
   };
   window.BrimFuture = BrimEngine.futureHooks || { realisticAvatar: { implemented: false }, heygen: { implemented: false } };
+  window.BrimFuture.walkTo = { implemented: false, async play() { return false; } };
   const voiceBox = $('voicePreviews');
   if (voiceBox) cast.forEach(row => {
     const b = document.createElement('button');
@@ -1373,6 +1386,24 @@
       goal.addEventListener('change', () => { eng.p.goal = goal.value.trim(); save(); });
     }
     if ($('progressHistory')) $('progressHistory').onclick = openHistory;
+    function focus(xPct, yPct) {
+      const w = stage.clientWidth, h = stage.clientHeight;
+      if (!w || !h) return;
+      scale = 2.2;
+      tx = w / 2 - (xPct / 100) * w * scale;
+      ty = h / 2 - (yPct / 100) * h * scale;
+      clamp();
+      world.classList.add('glide');
+      requestAnimationFrame(apply);
+      setTimeout(() => world.classList.remove('glide'), 800);
+    }
+    function fit() {
+      scale = 1; tx = 0; ty = 0;
+      world.classList.add('glide');
+      requestAnimationFrame(apply);
+      setTimeout(() => world.classList.remove('glide'), 800);
+    }
+    window.BrimMap = { focus: focus, fit: fit };
     apply();
   }
   const lib = BrimLibrary.createLibrary({
@@ -1513,17 +1544,30 @@
   }
   function askQuiz() {
     const it = quiz.items[quiz.i];
-    libPanels([{ speaker: 'marcus', text: 'Question ' + (quiz.i + 1) + ' of 5. ' + it.q }]);
-    $('marcusQ').placeholder = 'Your answer';
+    const text = 'Question ' + (quiz.i + 1) + ' of 5. ' + it.q;
+    libPanels([{ speaker: 'marcus', text: text }]);
+    if ($('marcusQ')) $('marcusQ').placeholder = 'Your answer';
+    if (document.body.dataset.view === 'map') play([{ speaker: 'marcus', text: text }]);
   }
-  function gradeQuiz(answer) {
+  function startQuiz() {
+    const items = (content['secplus-701'].items || []).slice();
+    for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = items[i]; items[i] = items[j]; items[j] = t; }
+    quiz = { items: items.slice(0, 5), i: 0, correct: 0 };
+    askQuiz();
+  }
+  async function gradeQuiz(answer) {
     const it = quiz.items[quiz.i];
     const t = answer.toLowerCase();
     const ok = !/\b(don'?t know|no idea|skip|pass)\b/.test(t) && (it.accept || []).some(w => t.includes(String(w).toLowerCase()));
     if (ok) quiz.correct++;
-    libPanels([{ speaker: 'user', text: answer }, { speaker: 'marcus', text: (ok ? 'Correct. ' : 'Not quite. ') + it.explain }]);
+    const reply = (ok ? 'Correct. ' : 'Not quite. ') + it.explain;
+    libPanels([{ speaker: 'user', text: answer }, { speaker: 'marcus', text: reply }]);
     quiz.i++;
-    if (quiz.i < quiz.items.length) { askQuiz(); return; }
+    if (quiz.i < quiz.items.length) {
+      if (document.body.dataset.view === 'map') await play([{ speaker: 'marcus', text: reply }]);
+      askQuiz();
+      return;
+    }
     const score = Math.round(100 * quiz.correct / quiz.items.length);
     const r = BrimEngine.awardXP(eng.p, 'library.secplus', score);
     BrimEngine.touchStreak(eng.p, Date.now());
@@ -1532,9 +1576,11 @@
     eng.p.lastFeedback = 'Marcus Security+ quiz: score ' + score + '. ' + quiz.correct + ' of 5.';
     save();
     renderStats();
-    libPanels([{ speaker: 'marcus', text: 'Quiz done. ' + quiz.correct + ' of 5. Score ' + score + '. You earned ' + r.xp + ' XP.' }]);
+    const done = 'Quiz done. ' + quiz.correct + ' of 5. Score ' + score + '. You earned ' + r.xp + ' XP.';
+    libPanels([{ speaker: 'marcus', text: done }]);
     quiz = null;
-    $('marcusQ').placeholder = 'Ask Marcus about this objective';
+    if ($('marcusQ')) $('marcusQ').placeholder = 'Ask Marcus about this objective';
+    if (document.body.dataset.view === 'map') await play([{ speaker: 'marcus', text: done }]);
   }
   if ($('libCoach')) $('libCoach').onchange = () => renderLibrary();
   if ($('libAddUrl')) $('libAddUrl').onclick = async () => {
@@ -1592,12 +1638,7 @@
     if (quiz) { gradeQuiz(q); return; }
     marcusSpeak(q);
   };
-  if ($('marcusQuiz')) $('marcusQuiz').onclick = () => {
-    const items = (content['secplus-701'].items || []).slice();
-    for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = items[i]; items[i] = items[j]; items[j] = t; }
-    quiz = { items: items.slice(0, 5), i: 0, correct: 0 };
-    askQuiz();
-  };
+  if ($('marcusQuiz')) $('marcusQuiz').onclick = () => startQuiz();
   let loopGen = 0;
   function renderDots() {
     const bar = $('loopBar');
@@ -1703,6 +1744,280 @@
   if ($('marcusCia')) $('marcusCia').onclick = () => beginChallenge('marcus-cia');
   if ($('marcusPhish')) $('marcusPhish').onclick = () => beginChallenge('marcus-phish');
 
+  const LEARNER_KEY = 'brimmesa.learner.marcus';
+  const PROBES = [
+    { id: 'cia', ask: "Don't recite the poster. Explain the CIA triad in your own words.", keys: ['confidentiality', 'integrity', 'availability'] },
+    { id: 'phishing', ask: 'Explain phishing in your own words. What makes spear phishing different?', keys: ['phish', 'fake', 'link', 'spear'] },
+    { id: 'network', ask: 'Last one. What does a firewall actually do? Plain words.', keys: ['filter', 'block', 'allow', 'traffic', 'network'] }
+  ];
+  function blankLearner() {
+    return { met: false, step: 'know', pending: '', newbie: false, asked: [], domains: {}, comm: { clarity: 0, confidence: 0, n: 0 }, gaps: [], lastTopic: '', start: '' };
+  }
+  function loadLearner() {
+    const saved = readJSON(LEARNER_KEY, null);
+    if (!saved || typeof saved !== 'object') return blankLearner();
+    saved.domains = saved.domains || {};
+    saved.comm = saved.comm || { clarity: 0, confidence: 0, n: 0 };
+    saved.gaps = saved.gaps || [];
+    saved.asked = saved.asked || [];
+    return saved;
+  }
+  function saveLearner(p) { localStorage.setItem(LEARNER_KEY, JSON.stringify(p)); }
+  function levelWord(n) { return n >= 75 ? 'solid' : n >= 40 ? 'workable' : 'early'; }
+  function scoreAnswer(text, keys) {
+    return BrimLibrary.rubric(text, { keywords: keys, practiceKeywords: keys }, 'explain');
+  }
+  function noteScore(learner, id, score) {
+    learner.domains[id] = score.dims.accuracy;
+    const n = (learner.comm.n || 0) + 1;
+    learner.comm.clarity = Math.round(((learner.comm.clarity || 0) * (n - 1) + score.dims.clarity) / n);
+    learner.comm.confidence = Math.round(((learner.comm.confidence || 0) * (n - 1) + score.dims.confidence) / n);
+    learner.comm.n = n;
+    learner.gaps = Object.keys(learner.domains).filter(k => learner.domains[k] < 60);
+    learner.lastTopic = id;
+  }
+  function nextProbe(learner) {
+    return PROBES.find(p => learner.asked.indexOf(p.id) < 0 && !(learner.domains[p.id] >= 75)) || null;
+  }
+  function probeCap(learner) {
+    if (learner.newbie) return 1;
+    if ((learner.domains.cia || 0) >= 75) return 3;
+    return 2;
+  }
+  function startingLine(learner) {
+    const cia = learner.domains.cia == null ? 0 : learner.domains.cia;
+    const phish = learner.domains.phishing == null ? 100 : learner.domains.phishing;
+    if (cia < 60) {
+      learner.start = 'CIA challenge';
+      return 'Starting point: the CIA triad. Your explanation was ' + levelWord(cia) + '. Say challenge when you want that activity. I will not open it for you.';
+    }
+    if (phish < 60) {
+      learner.start = 'phishing';
+      return 'CIA is ' + levelWord(cia) + '. Starting point: phishing. Say teach phishing, or say quiz if you want five questions.';
+    }
+    learner.start = 'quiz';
+    return 'You can explain this. Clarity ' + learner.comm.clarity + ', confidence ' + learner.comm.confidence + '. Starting point: a five-question Security+ quiz. Say quiz when you want it.';
+  }
+  function wantsAria(text) {
+    return /\b(back to aria|return to aria|back to the map|talk to aria)\b/i.test(text);
+  }
+  function ariaSummary() {
+    return spokenRecent.slice(-4).map(l => (l.speaker === 'user' ? 'User' : l.speaker) + ': ' + l.text).join(' | ');
+  }
+  async function detectIntent(text) {
+    const fallback = BrimLibrary.keywordIntent(text);
+    const named = BrimLibrary.HOSTS.some(h => String(text).toLowerCase().indexOf(h.id) >= 0);
+    if (!named || !localStorage.getItem(GEMINI_KEY) || llm.overLimit()) return fallback;
+    try {
+      const raw = await llm.generate([
+        'Does the user want an introduction to one coach?',
+        'Coaches: marcus, amara, jasmine, renee.',
+        'JSON only: {"coach":"marcus|amara|jasmine|renee|none","topic":""}',
+        'User: ' + String(text).slice(0, 300)
+      ].join('\n'), null);
+      const clean = String(raw || '').replace(/```json|```/g, '').trim();
+      let j = null;
+      try { j = JSON.parse(clean); } catch (e) {
+        const m = clean.match(/\{[\s\S]*\}/);
+        if (m) { try { j = JSON.parse(m[0]); } catch (e2) { j = null; } }
+      }
+      const host = j && BrimLibrary.HOSTS.find(h => h.id === String(j.coach || '').toLowerCase());
+      if (!host) return fallback;
+      const topic = String((j && j.topic) || (fallback && fallback.topic) || '').trim();
+      return { coachId: host.id, topic: topic, place: host.place, dest: host.dest, line: host.line };
+    } catch (e) { return fallback; }
+  }
+  function showVisit(coach) {
+    const card = $('visitCard');
+    if (!card) return;
+    card.hidden = false;
+    const img = $('visitImg');
+    img.src = coach.portrait;
+    img.alt = 'Portrait of ' + coach.name;
+    $('visitName').textContent = coach.name;
+    $('visitLine').textContent = hostSession && hostSession.topic ? 'About ' + hostSession.topic : coach.role;
+    card.classList.remove('handoff-card');
+    void card.offsetWidth;
+    card.classList.add('handoff-card');
+  }
+  function guestOpen(coach, handoff) {
+    const topic = handoff.topic ? ' You wanted ' + handoff.topic + '.' : '';
+    const goal = handoff.goal ? ' Your goal: ' + handoff.goal + '.' : '';
+    if (coach.id === 'amara') return "Aria sent you over. I'm Amara." + topic + goal + ' One claim, then one reason. Say it.';
+    if (coach.id === 'jasmine') return "Aria introduced you. I'm Jasmine." + topic + " Tell me the scene the way you'd tell a friend.";
+    if (coach.id === 'renee') return "Aria pointed you here. I'm Renee." + topic + ' Who is in the room, and what should they leave with?';
+    return 'Aria introduced you.' + topic;
+  }
+  function scriptedGuest(id, value) {
+    const bit = String(value || '').trim().slice(0, 80);
+    if (id === 'amara') return 'I heard: ' + bit + '. Now the reason, in one line.';
+    if (id === 'jasmine') return 'Okay, the scene is ' + bit + '. Retell it to a friend who was not there.';
+    if (id === 'renee') return 'They heard ' + bit + '. Who was left out of that?';
+    return 'Got it. Say the next line.';
+  }
+  async function returnToAria() {
+    const topic = (hostSession && (hostSession.topic || hostSession.lastTopic)) || '';
+    const last = (hostSession && hostSession.lastExchange) || '';
+    const who = hostSession ? ((cast.find(c => c.id === hostSession.coachId) || {}).name || '') : '';
+    hostSession = null;
+    hostLock = false;
+    if (window.BrimMap) window.BrimMap.fit();
+    if ($('visitCard')) $('visitCard').hidden = true;
+    const bit = who ? 'You were with ' + who : 'Welcome back';
+    const about = topic ? ' on ' + topic : '';
+    const tail = last ? ' Last thing you said: ' + last + '.' : '';
+    await play([{ speaker: 'aria', text: bit + about + '.' + tail + ' Where to next?' }]);
+  }
+  async function marcusGreet(handoff) {
+    const learner = loadLearner();
+    learner.lastTopic = handoff.topic || learner.lastTopic || '';
+    const topic = handoff.topic ? ' Aria said this is about ' + handoff.topic + '.' : ' Aria walked you over.';
+    if (learner.met) {
+      saveLearner(learner);
+      const cia = learner.domains.cia == null ? 'unknown' : levelWord(learner.domains.cia);
+      await play([{ speaker: 'marcus', text: 'Aria already introduced you.' + topic + ' Last time CIA was ' + cia + '. We left off at ' + (learner.start || 'the CIA triad') + '. Say challenge, quiz, or teach.' }]);
+      return;
+    }
+    if (learner.step === 'probe' && learner.pending) {
+      const probe = PROBES.find(p => p.id === learner.pending);
+      saveLearner(learner);
+      await play([{ speaker: 'marcus', text: 'Aria sent you back. We were still on this. ' + (probe ? probe.ask : 'What do you already know?') }]);
+      return;
+    }
+    learner.step = 'know';
+    learner.met = false;
+    saveLearner(learner);
+    await play([{ speaker: 'marcus', text: 'Marcus. Security+, Network+, CySA+, that lane.' + topic + " What do you already know? Say it in your own words. Don't fluff it." }]);
+  }
+  async function finishAssess(learner) {
+    const line = startingLine(learner);
+    learner.met = true;
+    learner.step = 'done';
+    saveLearner(learner);
+    if (hostSession) hostSession.lastTopic = learner.start;
+    await play([{ speaker: 'marcus', text: line }]);
+  }
+  async function assessTurn(value) {
+    const learner = loadLearner();
+    if (learner.step === 'know') {
+      const pre = scoreAnswer(value, PROBES[0].keys);
+      if (pre.dims.accuracy >= 67) {
+        noteScore(learner, 'cia', pre);
+        learner.asked.push('cia');
+      }
+      learner.newbie = /\b(nothing|zero|beginner|brand new|don't know|dont know|no idea|starting over)\b/i.test(value);
+      if (learner.newbie) learner.asked.push('phishing', 'network');
+      const probe = nextProbe(learner);
+      if (!probe) { await finishAssess(learner); return; }
+      learner.step = 'probe';
+      learner.pending = probe.id;
+      learner.asked.push(probe.id);
+      saveLearner(learner);
+      await play([{ speaker: 'marcus', text: probe.ask }]);
+      return;
+    }
+    const probe = PROBES.find(p => p.id === learner.pending) || PROBES[0];
+    noteScore(learner, probe.id, scoreAnswer(value, probe.keys));
+    const asked = learner.asked.filter(id => PROBES.some(p => p.id === id)).length;
+    const nxt = asked < probeCap(learner) ? nextProbe(learner) : null;
+    if (nxt) {
+      learner.pending = nxt.id;
+      learner.asked.push(nxt.id);
+      saveLearner(learner);
+      await play([{ speaker: 'marcus', text: 'Noted. ' + nxt.ask }]);
+      return;
+    }
+    await finishAssess(learner);
+  }
+  async function marcusTurn(value) {
+    const learner = loadLearner();
+    if (!learner.met) { await assessTurn(value); return; }
+    const t = value.toLowerCase();
+    if (/\bquiz\b/.test(t)) { startQuiz(); return; }
+    if (/\bphishing\b/.test(t) && /\bchallenge\b/.test(t)) {
+      const spec = BrimLibrary.challenge('marcus-phish', Object.keys(eng.p.achievements || {}));
+      if (!spec || spec.locked) {
+        await play([{ speaker: 'marcus', text: 'Phishing stays locked until you finish the CIA challenge. Say challenge.' }]);
+        return;
+      }
+      await beginChallenge('marcus-phish');
+      return;
+    }
+    if (/\b(challenge|cia)\b/.test(t)) { await beginChallenge('marcus-cia'); return; }
+    if (/\b(teach|explain)\b/.test(t)) { await marcusSpeak(value); return; }
+    learner.lastTopic = hostSession.topic || learner.lastTopic;
+    saveLearner(learner);
+    await play([{ speaker: 'marcus', text: 'Say challenge, quiz, or teach. Or tell me the idea in one sentence.' }]);
+  }
+  async function guestTurn(value) {
+    const coach = cast.find(c => c.id === hostSession.coachId);
+    if (!coach) return;
+    let text = scriptedGuest(coach.id, value);
+    if (localStorage.getItem(GEMINI_KEY) && !llm.overLimit()) {
+      try {
+        const got = await llm.generate([
+          'You are ' + coach.name + '. Personality: ' + coach.personality,
+          'Aria introduced this person. Goal: ' + (hostSession.goal || 'none') + '. Topic: ' + (hostSession.topic || 'none') + '.',
+          'Aria context: ' + (hostSession.ariaSummary || 'none'),
+          'Reply in one or two spoken sentences. No markdown. Write the brand as Brimmesa.',
+          'They said: ' + value.slice(0, 400)
+        ].join('\n'), null);
+        const clean = String(got || '').replace(/[*_`#]/g, '').replace(/\s+/g, ' ').trim().slice(0, 320);
+        if (clean) text = clean;
+      } catch (e) {}
+    }
+    await play([{ speaker: coach.id, text: text }]);
+  }
+  async function coachTurn(value) {
+    if (hostSession) hostSession.lastExchange = String(value || '').slice(0, 160);
+    if (hostSession && hostSession.coachId === 'marcus') return marcusTurn(value);
+    return guestTurn(value);
+  }
+  async function beginHandoff(intent, userText) {
+    const coach = cast.find(c => c.id === intent.coachId);
+    if (!coach) return;
+    const dest = destinations.find(d => d.id === intent.dest);
+    hostSession = {
+      coachId: intent.coachId,
+      topic: intent.topic || '',
+      goal: (eng.p.goal || '').trim(),
+      ariaSummary: ariaSummary(),
+      userLine: userText,
+      lastExchange: '',
+      lastTopic: ''
+    };
+    hostLock = true;
+    await play([{ speaker: 'aria', text: intent.line }]);
+    showHome();
+    let walked = false;
+    if (window.BrimFuture && window.BrimFuture.walkTo && window.BrimFuture.walkTo.implemented) {
+      try { walked = await window.BrimFuture.walkTo.play({ coachId: coach.id, dest: dest || null }); } catch (e) { walked = false; }
+    }
+    if (!walked && dest && window.BrimMap) window.BrimMap.focus(dest.x, dest.y);
+    showVisit(coach);
+    await new Promise(resolve => setTimeout(resolve, 720));
+    hostLock = false;
+    if (!hostSession || hostSession.coachId !== coach.id) return;
+    if (coach.id === 'marcus') await marcusGreet(hostSession);
+    else await play([{ speaker: coach.id, text: guestOpen(coach, hostSession) }]);
+  }
+  async function loadAdminLibrary() {
+    try {
+      const res = await fetch('data/library/manifest.json');
+      if (!res.ok) return;
+      const man = await res.json();
+      for (const path of man.files || []) {
+        try {
+          const docRes = await fetch(path);
+          if (!docRes.ok) continue;
+          const doc = await docRes.json();
+          (doc.items || []).forEach(item => { if (item && item.title) lib.importAdmin(item); });
+        } catch (e) {}
+      }
+    } catch (e) {}
+  }
+  if ($('backAria')) $('backAria').onclick = () => { if (hostSession) returnToAria(); };
+
   setupMap();
   showWorld('map');
 
@@ -1712,6 +2027,7 @@
   idleCaption();
   renderStats();
   applyRoute();
+  await loadAdminLibrary();
   prepareOpener();
 })().catch(err => {
   const note = document.getElementById('note');

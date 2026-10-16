@@ -1,0 +1,23 @@
+{
+  "items": [
+    {
+      "id": "atlas-cia-note",
+      "coaches": ["marcus"],
+      "title": "CIA triad, Brimmesa original note",
+      "sourceType": "notes",
+      "url": "",
+      "channel": "Brimmesa",
+      "timestamps": [],
+      "chunks": [
+        {
+          "id": "c0",
+          "text": "Confidentiality means the wrong people do not see it. Integrity means nobody quietly changed it. Availability means you can open it when you need it.",
+          "start": null
+        }
+      ],
+      "tags": ["security+", "cia"],
+      "attribution": "Original Brimmesa note for the communication gym. Not copied from a third-party course.",
+      "hashKey": "atlas:marcus:cia-note"
+    }
+  ]
+}

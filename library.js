@@ -134,6 +134,7 @@
         timestamps: src.timestamps || (timed ? timed.cues : []),
         chunks: chunks,
         tags: src.tags || [],
+        attribution: src.attribution || '',
         addedAt: src.addedAt || Date.now(),
         hash: digest
       };
@@ -235,8 +236,46 @@
         hashKey: 'seed:messer:sy0-701'
       });
     }
+    function contentHash(src, chunks) {
+      return hash(JSON.stringify({
+        title: src.title || '',
+        url: src.url || '',
+        sourceType: src.sourceType || '',
+        chunks: (chunks || []).map(c => [c.start == null ? null : c.start, c.text || ''])
+      }));
+    }
+    function importAdmin(input) {
+      const src = input || {};
+      const chunks = src.chunks && src.chunks.length ? src.chunks : chunkText(src.text || src.title || '');
+      const digestContent = contentHash(src, chunks);
+      const key = src.hashKey || (src.url ? 'url:' + String(src.url).trim() : 'text:' + (src.title || '') + '|' + (src.text || ''));
+      const digest = hash(key);
+      const byKey = state.items.find(it => it.hash === digest);
+      const byContent = state.items.find(it => it.contentHash === digestContent);
+      if ((byKey && byKey.contentHash === digestContent) || byContent) return { item: byKey || byContent, duplicate: true };
+      if (byKey) {
+        byKey.title = src.title || byKey.title;
+        byKey.sourceType = src.sourceType || byKey.sourceType;
+        byKey.url = src.url || '';
+        byKey.channel = src.channel || '';
+        byKey.timestamps = src.timestamps || [];
+        byKey.chunks = chunks;
+        byKey.tags = src.tags || [];
+        byKey.attribution = src.attribution || '';
+        byKey.contentHash = digestContent;
+        persist();
+        return { item: byKey, updated: true, duplicate: false };
+      }
+      const saved = add(Object.assign({}, src, { chunks: chunks }));
+      if (saved.item) {
+        saved.item.contentHash = digestContent;
+        persist();
+      }
+      return saved;
+    }
     return {
       add: add,
+      importAdmin: importAdmin,
       remove: remove,
       search: search,
       items: () => state.items.slice(),
@@ -373,6 +412,21 @@
     return { dims: dims, overall: overall, tip: String(j.tip || fallback.tip).slice(0, 140), low: fallback.low, source: 'gemini' };
   }
 
-  const api = { createLibrary, hash, chunkText, parseTimed, parseTakeout, youtube, retrievalPrompt, fmtTime, LOOP, DIMENSIONS, challenge, rubric, feedbackText, evalPrompt, readScores };
+  const HOSTS = [
+    { id: 'marcus', place: 'the Cybersecurity Academy', dest: 'skills', line: "Absolutely! Marcus is over at the Cybersecurity Academy. Come on, I'll introduce you." },
+    { id: 'amara', place: 'Mindset and Purpose', dest: 'mindset', line: "Absolutely! Amara is at Mindset and Purpose. Come on, I'll introduce you." },
+    { id: 'jasmine', place: 'Relationships and Dating', dest: 'relationships', line: "Absolutely! Jasmine is over in Relationships and Dating. Come on, I'll introduce you." },
+    { id: 'renee', place: 'Lifestyle and Social Skills', dest: 'lifestyle', line: "Absolutely! Renee is over in Lifestyle and Social Skills. Come on, I'll introduce you." }
+  ];
+  function keywordIntent(text) {
+    const t = String(text || '').toLowerCase();
+    const coach = HOSTS.find(h => t.indexOf(h.id) >= 0);
+    if (!coach) return null;
+    if (!/\b(talk|speak|meet|see|introduce|chat|with)\b/.test(t)) return null;
+    const about = t.match(/\babout\s+([^.?!]+)/);
+    return { coachId: coach.id, topic: about ? about[1].trim() : '', place: coach.place, dest: coach.dest, line: coach.line };
+  }
+
+  const api = { createLibrary, hash, chunkText, parseTimed, parseTakeout, youtube, retrievalPrompt, fmtTime, LOOP, DIMENSIONS, challenge, rubric, feedbackText, evalPrompt, readScores, keywordIntent, HOSTS };
   if (typeof module !== 'undefined') module.exports = api; else root.BrimLibrary = api;
 })(this);

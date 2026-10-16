@@ -334,6 +334,9 @@ button.ghost {
   border: 1px solid var(--line); background: #07080c; touch-action: none;
 }
 .map-world { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; }
+.map-world.glide { transition: transform .7s ease; }
+.handoff-card { animation: handoffIn .45s ease; }
+@keyframes handoffIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 .map-world img { width: 100%; height: 100%; object-fit: fill; display: block; user-select: none; -webkit-user-drag: none; }
 #hotspots { position: absolute; inset: 0; }
 .hotspot {
@@ -499,7 +502,15 @@ input[type=checkbox] { width: 22px; height: 22px; }
         </article>
       </div>
       <div class="guide-col">
-        <article class="aria-card">
+        <article id="visitCard" class="aria-card handoff-card" hidden>
+          <img id="visitImg" alt="">
+          <div>
+            <p class="kicker" id="visitName">Coach</p>
+            <p id="visitLine"></p>
+            <button class="ghost" id="backAria" type="button">Back to Aria</button>
+          </div>
+        </article>
+        <article class="aria-card" id="ariaCard">
           <img src="assets/aria.webp" alt="Aria, the guide, cropped from the world map">
           <div>
             <p class="kicker">Aria</p>
