@@ -1949,11 +1949,36 @@
     saveLearner(learner);
     await play([{ speaker: 'marcus', text: 'Say challenge, quiz, or teach. Or tell me the idea in one sentence.' }]);
   }
+  function noteBody(hit) {
+    return String((hit && hit.text) || '').replace(/\s*Link:\s*https?:\/\/\S+/gi, '').trim();
+  }
+  function timedLink(hit) {
+    if (!hit || !hit.url) return '';
+    if (hit.start == null || /[?&]t=/.test(hit.url)) return hit.url;
+    return hit.url + (hit.url.indexOf('?') >= 0 ? '&' : '?') + 't=' + hit.start;
+  }
+  function scriptedFromNotes(coach, hit) {
+    const body = noteBody(hit);
+    const link = timedLink(hit);
+    const when = hit.start == null ? '' : ' at ' + BrimLibrary.fmtTime(hit.start);
+    const cite = 'Source: ' + hit.title + (link ? ' ' + link : '') + when + '.';
+    if (coach.id === 'amara') return 'One claim. ' + body + ' ' + cite;
+    return body + ' ' + cite;
+  }
   async function guestTurn(value) {
     const coach = cast.find(c => c.id === hostSession.coachId);
     if (!coach) return;
-    let text = scriptedGuest(coach.id, value);
-    if (localStorage.getItem(GEMINI_KEY) && !llm.overLimit()) {
+    const hits = lib.search(value + ' ' + (hostSession.topic || ''), { coach: coach.id, limit: 3 });
+    let text = '';
+    if (hits.length && localStorage.getItem(GEMINI_KEY) && !llm.overLimit()) {
+      try {
+        const got = await llm.generate(BrimLibrary.retrievalPrompt(coach, value, hits), null);
+        const clean = String(got || '').replace(/[*_`#]/g, '').replace(/\s+/g, ' ').trim().slice(0, 420);
+        if (clean) text = clean;
+      } catch (e) {}
+    }
+    if (!text && hits.length) text = scriptedFromNotes(coach, hits[0]);
+    if (!text && localStorage.getItem(GEMINI_KEY) && !llm.overLimit()) {
       try {
         const got = await llm.generate([
           'You are ' + coach.name + '. Personality: ' + coach.personality,
@@ -1966,6 +1991,7 @@
         if (clean) text = clean;
       } catch (e) {}
     }
+    if (!text) text = scriptedGuest(coach.id, value);
     await play([{ speaker: coach.id, text: text }]);
   }
   async function coachTurn(value) {

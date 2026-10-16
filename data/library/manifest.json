@@ -1,6 +1,7 @@
 {
   "version": 1,
   "files": [
-    "data/library/marcus/cia-note.json"
+    "data/library/marcus/cia-note.json",
+    "data/library/amara/magick-moment.json"
   ]
 }

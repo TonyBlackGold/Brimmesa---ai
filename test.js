@@ -496,6 +496,17 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
   const replaced = admin.importAdmin(edited);
   assert(replaced.updated && replaced.item.chunks[0].text === 'Updated original note.');
   assert(admin.importAdmin(edited).duplicate);
+  const amaraFile = manifest.files.find(p => /amara/.test(p));
+  const amaraDoc = JSON.parse(fs.readFileSync(amaraFile, 'utf8'));
+  const amaraItem = amaraDoc.items[0];
+  assert(amaraItem.coaches.indexOf('amara') >= 0 && amaraItem.chunks.length >= 10 && amaraItem.chunks.length <= 25);
+  assert(amaraItem.chunks.every(c => Number.isFinite(c.start) && /[?&]t=\d+/.test(c.text) && c.text.length < 400));
+  assert(/not a transcript/i.test(amaraItem.attribution));
+  assert(!/\b(fuck|shit|bitch|hoe|pimp)\b/i.test(JSON.stringify(amaraItem.chunks)));
+  const amaraLib = Lib.createLibrary({ get: () => null, set: () => {} });
+  amaraLib.importAdmin(amaraItem);
+  const amaraHit = amaraLib.search('magic moment mentor purpose', { coach: 'amara' })[0];
+  assert(amaraHit && /youtube\.com/.test(amaraHit.url) && amaraHit.start != null);
 
   console.log('\nALL TESTS PASSED');
 })().catch(err => { console.error('FAIL', err); process.exit(1); });

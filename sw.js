@@ -1,5 +1,5 @@
 // Network-first cache so a refresh picks up a new deploy, with an offline fallback.
-const C = 'brimmesa-v16';
+const C = 'brimmesa-v17';
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== C).map(k => caches.delete(k)))).then(() => self.clients.claim()));

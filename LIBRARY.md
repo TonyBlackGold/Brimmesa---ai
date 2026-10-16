@@ -31,4 +31,4 @@ User uploads stay in the browser. Repo files are the admin shelf. At load, `data
 
 `sourceType` is `youtube`, `playlist`, `transcript`, `notes`, or `takeout`. `start` is seconds, or null. Do not paste copyrighted transcripts or exam dumps. Original notes and reference links only.
 
-The sample already shipped is `data/library/marcus/cia-note.json`.
+The samples already shipped are `data/library/marcus/cia-note.json` and `data/library/amara/magick-moment.json`. The Amara file is original lesson notes with timestamps and links. It is not a stored transcript.
