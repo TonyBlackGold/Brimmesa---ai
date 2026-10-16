@@ -201,11 +201,9 @@
     const settingUp = n >= 100 || phase === 'decoder' || phase === 'skeleton' || phase === 'reveal';
     if (settingUp) {
       const step = phase === 'skeleton' ? 'skeleton' : phase === 'reveal' ? 'reveal' : 'decoder';
-      $('honest').textContent = 'Setting up 3D Amara…';
       set3dStatus('setting up ' + step);
       return;
     }
-    $('honest').textContent = 'Loading 3D Amara… ' + n + '%';
     set3dStatus('loading ' + n + '%');
   }
   function errorText(err) {
@@ -231,7 +229,7 @@
   function refresh3dStatus() {
     if (!want3d()) { set3dStatus('off, still portrait'); return; }
     if (!face) {
-      set3dStatus(faceFailed && $('honest') ? $('honest').textContent : 'loading');
+      if (!faceFailed) set3dStatus('loading');
       return;
     }
     let d = { running: false, css: '0x0', buffer: '0x0', webgl: 'none', audio: 'none', lost: false, error: '' };
@@ -250,13 +248,11 @@
   function showPortrait(reason) {
     $('heroFrame').classList.remove('is-3d');
     document.body.dataset.avatarMode = 'portrait';
-    $('honest').textContent = reason || 'Still portrait · no lip sync';
     set3dStatus(reason || 'still portrait');
   }
   function revealStage() {
     $('heroFrame').classList.add('is-3d');
     document.body.dataset.avatarMode = '3d';
-    $('honest').textContent = '3D coach · blinks and lip sync on this device';
     showRetry(false);
   }
   function showStage() {
