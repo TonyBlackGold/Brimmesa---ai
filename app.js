@@ -576,12 +576,25 @@
     $('caption').textContent = line.text;
     $('liveName').textContent = name;
     $('liveLine').textContent = line.text;
-    if ($('ariaLine') && (line.speaker === 'aria' || (!hostSession && line.speaker !== 'user'))) $('ariaLine').textContent = line.text;
+    const src = portraitOf(line.speaker);
+    if (src && line.speaker !== 'user') {
+      const hero = $('heroImg');
+      if (hero) { hero.src = src; hero.alt = 'Portrait of ' + name; }
+      const strip = document.querySelector('.live-strip img');
+      if (strip) { strip.src = src; strip.alt = 'Portrait of ' + name; }
+      const frame = $('heroFrame');
+      if (frame) frame.dataset.speaker = line.speaker === 'coach' ? 'amara' : line.speaker;
+      const live = document.querySelector('.live-strip');
+      if (live) live.dataset.speaker = line.speaker === 'coach' ? 'amara' : line.speaker;
+    }
+    if ($('ariaLine') && line.speaker === 'aria') $('ariaLine').textContent = line.text;
     if (hostSession && line.speaker !== 'user' && line.speaker !== 'aria' && $('visitLine')) $('visitLine').textContent = line.text;
   }
   function present(line) {
-    if (!line || line.speaker !== 'coach' || document.body.dataset.view === 'area') return line;
-    return Object.assign({}, line, { speaker: 'aria' });
+    if (!line || line.speaker !== 'coach') return line;
+    const id = (hostSession && hostSession.coachId) || eng.activeCoach || (document.body.dataset.view === 'area' ? 'amara' : 'aria');
+    if (!id || id === 'coach') return line;
+    return Object.assign({}, line, { speaker: id });
   }
   let opener = '', openerHeard = false, loopRun = null, hostSession = null, hostLock = false;
   const spokenRecent = [];
@@ -611,16 +624,63 @@
       const shown = present(l);
       show(shown); setCaption(shown);
       if (l.emotion && face) face.react(l.emotion);
-      setAvatarState('speaking', { speaker: l.speaker });
+      setAvatarState('speaking', { speaker: shown.speaker });
       if (id !== playId) return;
       await speak(shown);
       if (id !== playId) return;
     }
     if (id !== playId) return;
-    setAvatarState('idle', { speaker: 'coach' });
+    const last = lines && lines.length ? present(lines[lines.length - 1]) : null;
+    setAvatarState('idle', { speaker: (last && last.speaker) || 'aria' });
     busy = false;
     save();
     if ($('auto').checked && rec && !loopRun && !hostLock && lines && lines.length && document.visibilityState === 'visible') setTimeout(listen, 250);
+  }
+  let liveWork = null;
+  function releaseWork() {
+    if (quiz) quiz = null;
+    if (loopRun) { loopRun = null; loopGen++; }
+    if (eng.act || eng.mode === 'quiz' || eng.mode === 'drill' || eng.mode === 'scenario' || eng.mode === 'reflect') eng.exitActivity();
+    liveWork = null;
+  }
+  function ownerNow() {
+    if (hostSession && hostSession.coachId) return hostSession.coachId;
+    if (eng.activeCoach) return eng.activeCoach;
+    if (document.body.dataset.view === 'area') return 'amara';
+    return 'aria';
+  }
+  function coachForActivity(a) {
+    if (!a) return 'amara';
+    if (a.id === 'secplus-701' || a.id === 'interruptions') return 'marcus';
+    const ids = ((content[a.id] && content[a.id].characters) || []).map(ch => ch.id);
+    if (ids.indexOf('marcus') >= 0) return 'marcus';
+    if (ids.indexOf('jasmine') >= 0) return 'jasmine';
+    if (ids.indexOf('renee') >= 0) return 'renee';
+    if (ids.indexOf('amara') >= 0) return 'amara';
+    if (ids.indexOf('aria') >= 0 && ids.length === 1) return 'aria';
+    const dest = destinations.find(d => d.activityId === a.id);
+    if (dest && DEST_COACH[dest.id]) return DEST_COACH[dest.id];
+    return 'amara';
+  }
+  function bindCoach(coachId, topic) {
+    if (!coachId || coachId === 'aria') {
+      hostSession = null;
+      if ($('visitCard')) $('visitCard').hidden = true;
+      return;
+    }
+    eng.activeCoach = coachId;
+    hostSession = {
+      coachId: coachId,
+      topic: topic || '',
+      goal: (eng.p.goal || '').trim(),
+      ariaSummary: ariaSummary(),
+      userLine: '',
+      lastExchange: '',
+      lastTopic: '',
+      direct: true
+    };
+    const coach = cast.find(c => c.id === coachId);
+    if (coach) showVisit(coach);
   }
   async function send(text) {
     const value = (text || '').trim();
@@ -630,16 +690,21 @@
     openerHeard = true;
     if ($('hearAria')) $('hearAria').hidden = true;
     if ($('micLabel')) $('micLabel').textContent = 'Tap to Talk';
-    if (loopRun && !loopRun.waiting) return;
+    const named = BrimLibrary.keywordIntent(value);
+    const leaving = wantsAria(value) || !!named;
+    if (!leaving && loopRun && !loopRun.waiting && liveWork && liveWork.owner === ownerNow()) return;
     interrupt();
     show({ speaker: 'user', text: value });
-    if (loopRun && loopRun.waiting) { await continueLoop(value); return; }
-    if (quiz && (!hostSession || hostSession.coachId === 'marcus')) { await gradeQuiz(value); return; }
-    if (hostSession && wantsAria(value) && !eng.act) { await returnToAria(); return; }
+    if (leaving) releaseWork();
+    if (wantsAria(value)) { await returnToAria(); return; }
+    if (named) { await beginHandoff(named, value); return; }
+    if (liveWork && liveWork.owner !== ownerNow()) releaseWork();
+    if (loopRun && loopRun.waiting && liveWork && liveWork.owner === ownerNow()) { await continueLoop(value); return; }
+    if (quiz && liveWork && liveWork.kind === 'library-quiz' && liveWork.owner === ownerNow()) { await gradeQuiz(value); return; }
     if (hostSession && !eng.act && !loopRun) { await coachTurn(value); return; }
     if (!eng.act && (eng.mode === 'menu' || eng.mode === 'askname' || eng.mode === 'area')) {
       const intent = await detectIntent(value);
-      if (intent) { await beginHandoff(intent, value); return; }
+      if (intent) { releaseWork(); await beginHandoff(intent, value); return; }
     }
     try {
       const emotion = (await import('./avatar/lipsync.js')).emotionFromText(value);
@@ -647,6 +712,12 @@
     } catch (e) {}
     setAvatarState('thinking', { speaker: 'coach' });
     const lines = await eng.handle(value);
+    if (eng.act) {
+      const coachId = coachForActivity(eng.act);
+      eng.activeCoach = coachId;
+      if (!liveWork || liveWork.lessonId !== eng.act.id) liveWork = { owner: coachId, kind: eng.act.type, lessonId: eng.act.id };
+      if (!hostSession || hostSession.coachId !== coachId) bindCoach(coachId, eng.act.title);
+    }
     if ((eng.mode === 'area' || eng.mode === 'reflect') && eng.area) { setRoute('#/area/' + eng.area.id); showArea(eng.area); }
     else showHome();
     play(lines);
@@ -816,6 +887,7 @@
     syncPresenter(document.body.dataset.voice || 'idle', '');
   }
   function launchActivity(a) {
+    if (!a) return;
     unlockAudio();
     greeted = true;
     if (eng.p.driving && !a.driving) {
@@ -823,6 +895,11 @@
       play([eng.C("That one needs your full attention, so let's save it for when you're parked. Try communication or Security plus.")]);
       return;
     }
+    releaseWork();
+    const coachId = coachForActivity(a);
+    eng.activeCoach = coachId;
+    liveWork = { owner: coachId, kind: a.type, lessonId: a.id };
+    bindCoach(coachId, a.title);
     show({ speaker: 'user', text: a.title });
     showHome();
     play(eng.start(a));
@@ -832,6 +909,10 @@
     if (!area) return;
     unlockAudio();
     greeted = true;
+    releaseWork();
+    hostSession = null;
+    eng.activeCoach = null;
+    if ($('visitCard')) $('visitCard').hidden = true;
     setRoute('#/area/' + id);
     showArea(area);
     play(eng.openArea(area));
@@ -841,6 +922,11 @@
     if (!area) return;
     unlockAudio();
     greeted = true;
+    releaseWork();
+    hostSession = null;
+    eng.activeCoach = 'amara';
+    liveWork = { owner: 'amara', kind: 'reflect', lessonId: id };
+    if ($('visitCard')) $('visitCard').hidden = true;
     setRoute('#/area/' + id);
     const intro = (!eng.area || eng.area.id !== id || eng.mode !== 'area') ? eng.openArea(area) : [];
     showArea(area);
@@ -872,7 +958,7 @@
       const pct = el('span', 'pct', '0%');
       pct.dataset.pct = area.id;
       b.append(icon(area.icon), text, pct);
-      b.onclick = () => launchArea(area.id);
+      b.onclick = () => { const dest = destinations.find(d => d.id === AREA_DEST[area.id]); if (dest) selectDestination(dest); launchArea(area.id); };
       nav.append(b);
     });
   }
@@ -888,10 +974,7 @@
       img.src = c.portrait;
       img.alt = 'Still portrait of ' + c.name;
       b.append(img, el('strong', null, c.name), el('small', null, c.role));
-      b.onclick = () => {
-        if (c.activityId) launchActivity(activityById(c.activityId));
-        else { showHome(); unlockAudio(); greeted = true; play(eng.welcome()); }
-      };
+      b.onclick = () => activateCoach(c.id);
       row.append(b);
     });
   }
@@ -915,7 +998,7 @@
       const pct = el('small', null, '0%');
       pct.dataset.pct = area.id;
       b.append(dot, el('strong', null, area.title.replace(' & ', ' & ')), pct, meter);
-      b.onclick = () => launchArea(area.id);
+      b.onclick = () => { const dest = destinations.find(d => d.id === AREA_DEST[area.id]); if (dest) selectDestination(dest); launchArea(area.id); };
       track.append(b);
     });
   }
@@ -1268,16 +1351,31 @@
   $('tabSettings').onclick = () => $('settingsDlg').showModal();
 
   function missionFor(id) { return (eng.p.missions || {})[id] || null; }
+  let selectedDestId = null;
+  const AREA_DEST = { mindset: 'mindset', health: 'health', career: 'career', business: 'wealth', relationships: 'relationships', lifestyle: 'lifestyle', estate: 'wealth', spirit: 'mindset' };
+  const DEST_COACH = { skills: 'marcus', career: 'marcus', mindset: 'amara', wealth: 'amara', relationships: 'jasmine', lifestyle: 'renee', travel: 'renee', health: 'amara', central: 'aria' };
   function renderMission() {
     const title = $('missionTitle');
     if (!title) return;
-    const next = destinations.find(d => d.activityId && !missionFor(d.activityId)) || destinations.find(d => d.activityId);
-    if (!next) return;
+    const next = destinations.find(d => d.id === selectedDestId);
+    if (!next) {
+      title.textContent = 'Choose a destination';
+      $('missionText').textContent = 'Tap a glowing stop. Aria will start the spoken practice.';
+      $('missionGo').textContent = 'Start';
+      $('missionGo').onclick = () => {};
+      return;
+    }
     title.textContent = next.title;
     $('missionText').textContent = next.blurb || 'Spoken practice.';
     const done = next.activityId && missionFor(next.activityId);
-    $('missionGo').textContent = done ? 'Practice again' : 'Start';
+    $('missionGo').textContent = next.id === 'central' ? 'Talk to Aria' : (done ? 'Practice again' : 'Start');
     $('missionGo').onclick = () => startDestination(next);
+  }
+  function selectDestination(d) {
+    if (!d) return;
+    selectedDestId = d.id;
+    document.querySelectorAll('.hotspot').forEach(btn => btn.classList.toggle('on', btn.dataset.dest === d.id));
+    renderMission();
   }
   function renderMissions() {
     const list = $('missionList');
@@ -1303,11 +1401,7 @@
       img.src = c.portrait;
       img.alt = 'Portrait of ' + c.name;
       b.append(img, el('strong', null, c.name), el('small', null, c.id === 'aria' ? 'Your guide · ' + c.role : c.role));
-      b.onclick = () => {
-        if (c.id === 'aria') { showHome(); openCentral(); return; }
-        if (c.id === 'amara') { launchArea('mindset'); return; }
-        if (c.activityId) launchActivity(activityById(c.activityId));
-      };
+      b.onclick = () => activateCoach(c.id);
       grid.append(b);
     });
   }
@@ -1339,10 +1433,15 @@
     if (!d) return;
     unlockAudio();
     greeted = true;
+    selectDestination(d);
     showHome();
-    if (!d.activityId) { openCentral(); return; }
+    if (!d.activityId || d.id === 'central') { activateCoach('aria'); return; }
     const act = activityById(d.activityId);
-    if (act) launchActivity(act);
+    if (act) { launchActivity(act); return; }
+    const coachId = DEST_COACH[d.id];
+    if (coachId && coachId !== 'aria') { activateCoach(coachId); return; }
+    const area = areas.find(a => a.id === d.id);
+    if (area) launchArea(area.id);
   }
   function openCentral() {
     unlockAudio();
@@ -1361,11 +1460,12 @@
       b.type = 'button';
       b.style.left = d.x + '%';
       b.style.top = d.y + '%';
+      b.dataset.dest = d.id;
       b.setAttribute('aria-label', d.title);
       const dot = document.createElement('i');
       const label = el('span', null, d.id === 'central' ? 'Central' : d.title.split(' ')[0]);
       b.append(dot, label);
-      b.onclick = () => { if (stage.dataset.drag === '1') return; startDestination(d); };
+      b.onclick = () => { if (stage.dataset.drag === '1') return; selectDestination(d); };
       host.append(b);
     });
     let scale = 1, tx = 0, ty = 0;
@@ -1566,7 +1666,9 @@
     line = line.replace(/\b(youtube|bosshogg(?: macaroni)?)\b/gi, '');
     return line.replace(/\s+/g, ' ').replace(/\s+([.?!])/g, '$1').trim();
   }
-  function scriptedMarcus(hits) {
+  function scriptedMarcus(hits, query) {
+    const item = BrimLibrary.matchItem((content['secplus-701'] && content['secplus-701'].items) || [], query || '');
+    if (item) return item.teach + ' ' + item.explain + ' Say that back in one sentence, or ask the next question.';
     const useful = (hits || []).filter(h => h.sourceType !== 'playlist');
     const hit = useful[0] || hits[0];
     const bit = hit ? (hit.citeInConversation === false ? BrimLibrary.lessonText(hit.text) : hit.text) : 'I only teach the Brimmesa outline saved on this device.';
@@ -1578,7 +1680,7 @@
     const hits = lib.search(query, { coach: 'marcus', limit: 3 });
     const row = cast.find(c => c.id === 'marcus');
     const top = (hits || []).filter(h => h.sourceType !== 'playlist')[0] || hits[0];
-    let text = scriptedMarcus(hits);
+    let text = scriptedMarcus(hits, query);
     if (localStorage.getItem(GEMINI_KEY) && !llm.overLimit()) {
       try {
         const got = await llm.generate(BrimLibrary.retrievalPrompt(row, query, hits), null);
@@ -1598,19 +1700,24 @@
   }
   function askQuiz() {
     const it = quiz.items[quiz.i];
+    quiz.askedId = it.id;
     const text = 'Question ' + (quiz.i + 1) + ' of 5. ' + it.q;
     libPanels([{ speaker: 'marcus', text: text }]);
     if ($('marcusQ')) $('marcusQ').placeholder = 'Your answer';
     if (document.body.dataset.view === 'map') play([{ speaker: 'marcus', text: text }]);
   }
   function startQuiz() {
+    releaseWork();
     const items = (content['secplus-701'].items || []).slice();
     for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = items[i]; items[i] = items[j]; items[j] = t; }
-    quiz = { items: items.slice(0, 5), i: 0, correct: 0 };
+    quiz = { items: items.slice(0, 5), i: 0, correct: 0, lessonId: 'secplus-701' };
+    liveWork = { owner: 'marcus', kind: 'library-quiz', lessonId: 'secplus-701' };
+    eng.activeCoach = 'marcus';
     askQuiz();
   }
   async function gradeQuiz(answer) {
-    const it = quiz.items[quiz.i];
+    const it = quiz && quiz.items.find(x => x.id === quiz.askedId);
+    if (!it) return;
     const t = answer.toLowerCase();
     const ok = !/\b(don'?t know|no idea|skip|pass)\b/.test(t) && (it.accept || []).some(w => t.includes(String(w).toLowerCase()));
     if (ok) quiz.correct++;
@@ -1633,6 +1740,7 @@
     const done = 'Quiz done. ' + quiz.correct + ' of 5. Score ' + score + '. You earned ' + r.xp + ' XP.';
     libPanels([{ speaker: 'marcus', text: done }]);
     quiz = null;
+    if (liveWork && liveWork.kind === 'library-quiz') liveWork = null;
     if ($('marcusQ')) $('marcusQ').placeholder = 'Ask Marcus about this objective';
     if (document.body.dataset.view === 'map') await play([{ speaker: 'marcus', text: done }]);
   }
@@ -1689,7 +1797,7 @@
     const q = $('marcusQ').value.trim();
     if (!q) return;
     $('marcusQ').value = '';
-    if (quiz) { gradeQuiz(q); return; }
+    if (quiz && liveWork && liveWork.kind === 'library-quiz' && liveWork.owner === 'marcus') { gradeQuiz(q); return; }
     marcusSpeak(q);
   };
   if ($('marcusQuiz')) $('marcusQuiz').onclick = () => startQuiz();
@@ -1726,6 +1834,10 @@
   async function beginChallenge(id) {
     const spec = BrimLibrary.challenge(id, Object.keys(eng.p.achievements || {}));
     if (!spec || spec.locked) return;
+    releaseWork();
+    eng.activeCoach = 'marcus';
+    liveWork = { owner: 'marcus', kind: 'loop', lessonId: spec.id };
+    bindCoach('marcus', spec.title);
     const gen = ++loopGen;
     openerHeard = true;
     greeted = true;
@@ -1791,8 +1903,9 @@
       if ($('marcusPhish') && loopRun.spec.unlocks) { $('marcusPhish').disabled = false; $('marcusPhish').textContent = 'Phishing challenge'; }
       const next = loopRun.spec.unlocks ? ' Phishing is unlocked.' : '';
       await sayMarcus('Advance. Score ' + overall + ' across both tries. You earned ' + r.xp + ' XP. Achievement: ' + loopRun.spec.achievement + '.' + next);
+      loopRun = null;
+      if (liveWork && liveWork.kind === 'loop') liveWork = null;
       renderDots();
-      loopRun.waiting = false;
     }
   }
   if ($('marcusCia')) $('marcusCia').onclick = () => beginChallenge('marcus-cia');
@@ -1923,8 +2036,10 @@
     const topic = (hostSession && (hostSession.topic || hostSession.lastTopic)) || '';
     const last = (hostSession && hostSession.lastExchange) || '';
     const who = hostSession ? ((cast.find(c => c.id === hostSession.coachId) || {}).name || '') : '';
+    releaseWork();
     hostSession = null;
     hostLock = false;
+    eng.activeCoach = null;
     syncPresenter('idle', 'aria');
     if (window.BrimMap) window.BrimMap.fit();
     if ($('visitCard')) $('visitCard').hidden = true;
@@ -1964,6 +2079,10 @@
   }
   async function assessTurn(value) {
     const learner = loadLearner();
+    if (/[?]/.test(value) || /^(what|why|how|who|tell me)\b/i.test(value)) {
+      await marcusSpeak(value);
+      return;
+    }
     if (/\bskip ahead\b/i.test(value)) {
       learner.met = true;
       learner.step = 'done';
@@ -2017,11 +2136,13 @@
       await beginChallenge('marcus-phish');
       return;
     }
-    if (/\b(challenge|cia)\b/.test(t)) { await beginChallenge('marcus-cia'); return; }
-    if (/\b(teach|explain)\b/.test(t)) { await marcusSpeak(value); return; }
-    learner.lastTopic = hostSession.topic || learner.lastTopic;
+    if (/^\s*challenge\s*$/.test(t) || /\b(start|begin|run) (the )?(cia )?challenge\b/.test(t) || t.trim() === 'cia') {
+      await beginChallenge('marcus-cia');
+      return;
+    }
+    learner.lastTopic = (hostSession && hostSession.topic) || value.slice(0, 80);
     saveLearner(learner);
-    await play([{ speaker: 'marcus', text: 'Say challenge, quiz, or teach. Or tell me the idea in one sentence.' }]);
+    await marcusSpeak(value);
   }
   function noteBody(hit) {
     return String((hit && hit.text) || '').replace(/\s*Link:\s*https?:\/\/\S+/gi, '').trim();
@@ -2059,6 +2180,7 @@
             'You are ' + coach.name + '. Personality: ' + coach.personality,
             coach.styleNote ? 'Style note: ' + coach.styleNote : '',
             'Shared method when you are teaching: welcome, explain, demonstrate, invite, coach, encourage.',
+            'Answer the question they actually asked. Do not substitute a different topic.',
             'Beginners get the explanation and one example. Experienced people may skip ahead.',
             'Not every turn is a lesson. Answer questions, humor, and tangents in your own voice.',
             'Never demand an exercise before you have explained it.',
@@ -2082,10 +2204,44 @@
     if (hostSession && hostSession.coachId === 'marcus') return marcusTurn(value);
     return guestTurn(value);
   }
+  async function activateCoach(id) {
+    const coach = cast.find(c => c.id === id);
+    if (!coach) return;
+    unlockAudio();
+    greeted = true;
+    openerHeard = true;
+    if ($('hearAria')) $('hearAria').hidden = true;
+    releaseWork();
+    if (id === 'aria') {
+      hostSession = null;
+      hostLock = false;
+      eng.activeCoach = null;
+      const dest = destinations.find(d => d.id === 'central');
+      if (dest) selectDestination(dest);
+      showHome();
+      if (window.BrimMap) window.BrimMap.fit();
+      if ($('visitCard')) $('visitCard').hidden = true;
+      openCentral();
+      return;
+    }
+    const host = BrimLibrary.HOSTS.find(h => h.id === id);
+    const dest = host ? destinations.find(d => d.id === host.dest) : null;
+    eng.activeCoach = id;
+    hostLock = false;
+    if (dest) selectDestination(dest);
+    showHome();
+    if (dest && window.BrimMap) window.BrimMap.focus(dest.x, dest.y);
+    bindCoach(id, host ? host.place : coach.role);
+    if (id === 'marcus') await marcusGreet(hostSession);
+    else await play([{ speaker: id, text: guestOpen(coach, hostSession) }]);
+  }
   async function beginHandoff(intent, userText) {
     const coach = cast.find(c => c.id === intent.coachId);
     if (!coach) return;
+    releaseWork();
+    eng.activeCoach = coach.id;
     const dest = destinations.find(d => d.id === intent.dest);
+    if (dest) selectDestination(dest);
     hostSession = {
       coachId: intent.coachId,
       topic: intent.topic || '',
@@ -2145,6 +2301,7 @@
   renderStats();
   applyRoute();
   await loadAdminLibrary();
+  document.body.dataset.ready = '1';
   prepareOpener();
 })().catch(err => {
   const note = document.getElementById('note');

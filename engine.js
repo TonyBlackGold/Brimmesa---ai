@@ -43,6 +43,33 @@
       this.mode = 'menu'; this.act = null; this.s = null;
       this.areas = areas || [];
       this.area = null;
+      this.lessons = {};
+      this.held = null;
+      this.activeCoach = null;
+    }
+    line(speaker, text) { return { speaker: speaker || 'coach', text: text }; }
+    // Leave a lesson without grading the next utterance against it.
+    // The snapshot stays under coach:lesson so a different conversation cannot see it.
+    exitActivity() {
+      if (this.act && this.s) {
+        const key = (this.activeCoach || 'aria') + ':' + this.act.id;
+        this.lessons[key] = { mode: this.mode, act: this.act, s: this.s, askedId: this.s.askedId || null };
+      }
+      this.held = null;
+      this.mode = 'menu';
+      this.act = null;
+      this.s = null;
+      this.activeCoach = null;
+    }
+    skillTitle(key) {
+      const acts = this.activities();
+      for (let i = 0; i < acts.length; i++) {
+        const skill = this.content[acts[i].id] && this.content[acts[i].id].skill;
+        if (skill === key) return acts[i].title;
+      }
+      const area = (this.areas || []).find(a => a.skill === key);
+      if (area) return area.title;
+      return String(key || '').replace(/[._]+/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
     }
     norm(s) { return String(s || '').toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ').trim(); }
     activities() { return this.worlds.worlds.flatMap(w => w.activities.map(a => ({ ...a, world: w.title }))); }
@@ -101,6 +128,7 @@
       });
     }
     openArea(area) {
+      if (this.act && this.s) this.exitActivity();
       this.area = area; this.mode = 'area'; this.act = null; this.s = null;
       return [this.C(area.intro)];
     }
@@ -120,7 +148,8 @@
       if (/\b(driving mode on|i'?m driving|start driving)\b/.test(t)) { this.p.driving = true; this.mode = 'menu'; return [this.C('Driving mode on. Short audio questions only.'), this.menuPrompt()]; }
       if (/\b(driving mode off|i'?m parked|stop driving)\b/.test(t)) { this.p.driving = false; return [this.C('Driving mode off.'), this.menuPrompt()]; }
       if (this.mode !== 'menu' && this.mode !== 'askname' && /\b(stop|quit|exit|change (the )?subject|something else|main menu|menu)\b/.test(t)) {
-        this.mode = 'menu'; this.act = null; return [this.C("No problem, let's switch."), this.menuPrompt()];
+        this.exitActivity();
+        return [this.C("No problem, let's switch."), this.menuPrompt()];
       }
       if (/\b(my progress|how am i doing|stats)\b/.test(t)) return [this.C(this.progressSummary())];
 
@@ -162,15 +191,16 @@
     llmOn() { return !!(this.provider && this.provider.enabled && this.provider.name === 'llm'); }
 
     start(a) {
+      if (this.act && this.s && this.act.id !== a.id) this.exitActivity();
       this.act = a; this.mode = a.type; const c = this.content[a.id];
       touchStreak(this.p, this.now());
-      if (a.type === 'scenario') { this.s = { turn: 0, hit: {}, ended: false }; return [this.C(c.setting)]; }
-      if (a.type === 'drill') { this.s = { round: 0, scores: [] }; return [this.C(c.intro)]; }
+      if (a.type === 'scenario') { this.s = { turn: 0, hit: {}, ended: false, lessonId: a.id }; return [this.C(c.setting)]; }
+      if (a.type === 'drill') { this.s = { round: 0, scores: [], lessonId: a.id }; return [this.C(c.intro)]; }
       if (a.type === 'quiz') {
         const n = this.p.driving ? 3 : c.lessonSize;
         const order = [...c.items].sort((x, y) => this.itemPriority(c, y) - this.itemPriority(c, x)).slice(0, n);
-        this.s = { order, i: 0, correct: 0, results: [] };
         const first = order[0];
+        this.s = { order, i: 0, correct: 0, results: [], lessonId: a.id, askedId: first.id };
         return [this.C(`${c.cert} ${c.examCode} lesson, ${n} questions. ${this.p.driving ? '' : c.disclaimer + ' '}${this.p.driving ? '' : first.teach + ' '}Question 1: ${first.q}`)];
       }
     }
@@ -235,15 +265,24 @@
     }
 
     quizTurn(text, t) {
-      const c = this.content[this.act.id], s = this.s, it = s.order[s.i], out = [];
+      const c = this.content[this.act.id], s = this.s, out = [];
+      if (!s || s.lessonId !== this.act.id) return [this.C('That lesson is closed. Say the lesson again when you want it.')];
+      const it = (s.askedId && c.items.find(x => x.id === s.askedId)) || s.order[s.i];
+      if (!it) return [this.C('That lesson is closed. Say the lesson again when you want it.')];
       if (/\b(repeat|say (that|it) again)\b/.test(t)) return [this.C(it.q)];
       const ok = /\b(don'?t know|no idea|skip|pass)\b/.test(t) ? false : has(t, it.accept);
       const items = this.p.mastery['secplus.items'] || (this.p.mastery['secplus.items'] = {});
       items[it.id] = ok; if (ok) s.correct++;
       s.results.push({ id: it.id, domain: it.domain, ok });
+      s.graded = { id: it.id, q: it.q, explain: it.explain };
       out.push(this.C((ok ? 'Correct! ' : 'Not quite. ') + it.explain));
       s.i++;
-      if (s.i < s.order.length) { const n = s.order[s.i]; out.push(this.C(`${this.p.driving ? '' : n.teach + ' '}Question ${s.i + 1}: ${n.q}`)); return out; }
+      if (s.i < s.order.length) {
+        const n = s.order[s.i];
+        s.askedId = n.id;
+        out.push(this.C(`${this.p.driving ? '' : n.teach + ' '}Question ${s.i + 1}: ${n.q}`));
+        return out;
+      }
       const score = Math.round(100 * s.correct / s.order.length);
       const missedDomains = [...new Set(s.results.filter(r => !r.ok).map(r => c.domains.find(d => d.id === r.domain).name))];
       const tips = missedDomains.length ? [`Next time we'll review ${missedDomains.join(' and ')}.`] : ['Perfect round. I will raise the difficulty as more items are added.'];
@@ -265,7 +304,7 @@
       const r = awardXP(this.p, skill, score);
       const fb = `${this.area.title} reflection: you stayed with ${prompts.length} questions.`;
       this.p.lastFeedback = fb;
-      this.p.lastActivity = 'area:' + this.area.id;
+      this.p.lastActivity = this.area.title;
       this.p.history.unshift({ t: this.now(), activity: this.area.title + ' reflection', score, xp: r.xp, summary: fb });
       this.p.history = this.p.history.slice(0, 50);
       this.mode = 'area'; this.s = null;
@@ -276,7 +315,7 @@
     finish(skill, score, good, tips, label) {
       const r = awardXP(this.p, skill, score);
       const fb = `${label}: score ${score}. ${good.length ? 'Strengths: ' + good.join(', ') + '.' : ''} ${tips.length ? 'Work on: ' + tips.join(' ') : ''}`.replace(/\s+/g, ' ').trim();
-      this.p.lastFeedback = fb; this.p.lastActivity = this.act.id;
+      this.p.lastFeedback = fb; this.p.lastActivity = this.act ? this.act.title : label;
       this.p.history.unshift({ t: this.now(), activity: this.act.title, score, xp: r.xp, summary: fb });
       this.p.history = this.p.history.slice(0, 50);
       if (score >= 70 && this.act) {
@@ -293,12 +332,13 @@
         });
         dims = ' Scores: ' + bits.join(', ') + '.';
       }
-      this.mode = 'menu'; this.act = null;
+      const who = this.activeCoach || 'coach';
+      this.mode = 'menu'; this.act = null; this.activeCoach = null;
       const extra = (r.improved ? ' That beats your personal best, so you earn bonus XP!' : '') + (r.levelUp ? ` Level up! You're now level ${level(this.p.xp)}.` : '');
-      return [this.C(`Coach feedback on ${fb}${dims} You earned ${r.xp} XP.${extra}`), this.menuPrompt()];
+      return [this.line(who, `Coach feedback on ${fb}${dims} You earned ${r.xp} XP.${extra}`), this.menuPrompt()];
     }
     progressSummary() {
-      const p = this.p, parts = Object.entries(p.mastery).filter(([, v]) => v.best !== undefined).map(([k, v]) => `${k} best ${v.best}`);
+      const p = this.p, parts = Object.entries(p.mastery).filter(([, v]) => v && v.best !== undefined).map(([k, v]) => `${this.skillTitle(k)} best ${v.best}`);
       return `Level ${level(p.xp)}, ${p.xp} XP, ${p.streak}-day streak. ${parts.join('; ') || 'No activities completed yet.'}`;
     }
   }
@@ -621,16 +661,22 @@
     async quiz(ctx, eng) {
       const lines = await ctx.scripted();
       try {
+        const graded = eng.s && eng.s.graded;
+        const who = eng.activeCoach || 'marcus';
         const prompt = [
-          this.persona('amara'),
+          this.persona(who),
+          'Shared method, in your own voice: welcome, explain, demonstrate, invite, coach, encourage.',
           'Security+ tutor. The app already graded this answer against the original question. Do not rewrite the question, do not change the verdict, and do not invent a new item.',
+          'Answer only the question that was just graded. Do not explain a different concept.',
+          graded ? 'Graded question: ' + graded.q : '',
+          graded ? 'Explanation that belongs to that question: ' + graded.explain : '',
           'Add one short study sentence in your own words.',
           this.lengthRule(eng),
           'Return JSON {"lines":[{"speaker":"coach","text":"...","emotion":"smile"}]}.',
           'Verdict already shown to the learner: ' + ((lines[0] && lines[0].text) || ''),
           this.progressBlock(eng),
           'User said: ' + ctx.text
-        ].join('\n');
+        ].filter(Boolean).join('\n');
         const got = this.normalizeLines(this.parseJSON(await this.generate(prompt, LINES_SCHEMA)), ['coach'], !!(eng.p && eng.p.driving));
         if (got[0]) lines.splice(1, 0, got[0]);
         this.remember(ctx.text, got.length ? got : lines.slice(0, 1));
@@ -667,10 +713,13 @@
     async chat(ctx, eng) {
       const driving = !!(eng.p && eng.p.driving);
       try {
+        const who = (eng && eng.activeCoach) || 'amara';
         const prompt = [
           'Adults only. Respectful life coaching. No sexual content, no pressure, no appearance ratings, no contact details.',
-          this.persona('amara'),
-          'You are Coach Amara. Speak only as coach. If they want a scored activity, suggest social, communication, or Security plus.',
+          this.persona(who),
+          'Shared method, in your own voice: welcome, explain, demonstrate, invite, coach, encourage. Beginners get the explanation and one example before you invite them to try. Do not open by demanding an exercise.',
+          'Answer the question they actually asked. Do not repeat a generic explanation of a different topic.',
+          'Speak only as coach. If they want a scored activity, suggest social, communication, or Security plus.',
           this.lengthRule(eng),
           'Return JSON {"lines":[{"speaker":"coach","text":"...","emotion":"smile"}]}. emotion is smile, concern, laugh, or surprise.',
           this.areaContext(eng),

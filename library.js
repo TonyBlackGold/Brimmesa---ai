@@ -114,7 +114,7 @@
       (who.styleNote ? 'Style note: ' + who.styleNote : ''),
       cite
         ? 'Cite each source you use as its title, link, and timestamp when you have them.'
-        : 'Teach these ideas as your own coaching. Do not mention a source, title, channel, link, timestamp, video, or that the idea came from notes.',
+        : 'Teach these ideas as your own coaching. Do not mention a source, title, channel, link, timestamp, video, or that the idea came from notes. Answer the question they actually asked. Do not substitute a different topic.',
       'Write the brand as Brimmesa, mixed case. One to three spoken sentences. No markdown.',
       'Notes:\n' + (notes || '(none)'),
       'Question: ' + String(query || '')
@@ -497,6 +497,19 @@
     { id: 'jasmine', place: 'Relationships and Dating', dest: 'relationships', line: "Absolutely! Jasmine is over in Relationships and Dating. Come on, I'll introduce you." },
     { id: 'renee', place: 'Lifestyle and Social Skills', dest: 'lifestyle', line: "Absolutely! Renee is over in Lifestyle and Social Skills. Come on, I'll introduce you." }
   ];
+  function matchItem(items, query) {
+    const words = String(query || '').toLowerCase().split(/[^a-z0-9+]+/).filter(w => w.length > 2);
+    let best = null, score = 0;
+    (items || []).forEach(it => {
+      const accept = it.accept || [];
+      const blob = (it.teach + ' ' + it.q + ' ' + it.explain + ' ' + accept.join(' ')).toLowerCase();
+      let s = 0;
+      words.forEach(w => { if (blob.indexOf(w) >= 0) s += 1; });
+      accept.forEach(a => { if (String(query || '').toLowerCase().indexOf(String(a).toLowerCase()) >= 0) s += 4; });
+      if (s > score) { score = s; best = it; }
+    });
+    return score > 0 ? best : null;
+  }
   function keywordIntent(text) {
     const t = String(text || '').toLowerCase();
     const coach = HOSTS.find(h => t.indexOf(h.id) >= 0);
@@ -506,6 +519,6 @@
     return { coachId: coach.id, topic: about ? about[1].trim() : '', place: coach.place, dest: coach.dest, line: coach.line };
   }
 
-  const api = { createLibrary, hash, chunkText, parseTimed, parseTakeout, youtube, retrievalPrompt, citesInConversation, lessonText, fmtTime, LOOP, METHOD, methodLine, methodReply, DIMENSIONS, challenge, rubric, feedbackText, evalPrompt, readScores, keywordIntent, HOSTS };
+  const api = { createLibrary, hash, chunkText, parseTimed, parseTakeout, youtube, retrievalPrompt, citesInConversation, lessonText, fmtTime, LOOP, METHOD, methodLine, methodReply, DIMENSIONS, challenge, rubric, feedbackText, evalPrompt, readScores, keywordIntent, matchItem, HOSTS };
   if (typeof module !== 'undefined') module.exports = api; else root.BrimLibrary = api;
 })(this);
