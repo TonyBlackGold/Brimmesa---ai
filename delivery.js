@@ -80,7 +80,8 @@
     if (!goal) return '';
     const bits = (goal.criteria || []).map(c => c.label + ' ' + c.score + '/5' + (c.evidence ? ' ("' + c.evidence + '")' : '')).join('. ');
     const tag = goal.source === 'estimate' ? ' Estimate, not a model score.' : '';
-    return 'Goal rubric. ' + (bits || 'No criteria.') + ' Fix: ' + (goal.fix || '') + '.' + tag;
+    const fix = String(goal.fix || '').replace(/[. ]+$/, '');
+    return 'Goal rubric. ' + (bits || 'No criteria.') + ' Fix: ' + fix + '.' + tag;
   }
   function countFillers(text) {
     const t = String(text || '').toLowerCase();
@@ -127,7 +128,8 @@
     if (!card) return '';
     const pace = card.wpm == null ? 'Pace was not measured, because there were no timestamps.' : (card.wpm + ' words per minute.');
     const pauses = card.pauseCount ? (card.pauseCount + ' pauses, longest ' + card.pauseMs + ' ms.') : 'No measurable pause.';
-    return 'Scorecard. Filler words: ' + card.fillers + '. ' + pace + ' ' + pauses + ' Tip: ' + card.tip + '.';
+    const tip = String(card.tip || '').replace(/[. ]+$/, '');
+    return 'Scorecard. Filler words: ' + card.fillers + '. ' + pace + ' ' + pauses + ' Tip: ' + tip + '.';
   }
 
   const api = { FILLERS, criteriaFor, goalEstimate, readGoal, formatGoal, countFillers, deliveryCard, formatCard };
