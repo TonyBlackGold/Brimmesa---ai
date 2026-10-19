@@ -720,7 +720,7 @@
     async chat(ctx, eng) {
       const driving = !!(eng.p && eng.p.driving);
       try {
-        const who = (eng && eng.activeCoach) || 'amara';
+        const who = (eng && eng.activeCoach) || 'aria';
         const prompt = [
           'Adults only. Respectful life coaching. No sexual content, no pressure, no appearance ratings, no contact details.',
           this.persona(who),

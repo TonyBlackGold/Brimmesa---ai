@@ -656,5 +656,65 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
   assert(walks.coaches.amara.dest === 'mindset' && walks.coaches.jasmine.dest === 'relationships');
   assert(walks.coaches.amara.figure.kind === 'sheet' && walks.coaches.jasmine.figure.kind === 'portrait');
 
+  console.log('8) gym profile, isolated coach state, Amara machine, rolling summary');
+  const Gym = require('./gym.js');
+  const bag = {};
+  const gymStore = {
+    get(k) { return Object.prototype.hasOwnProperty.call(bag, k) ? bag[k] : null; },
+    set(k, v) { bag[k] = v; },
+    remove(k) { delete bag[k]; }
+  };
+  bag['brimmesa.learner.marcus'] = JSON.stringify({ met: true, domains: { cia: 80 } });
+  let profile = Gym.editProfile(Gym.blankProfile(), {
+    preferredStyle: 'warm', objective: 'Speak up at work', strength: 'Warm open', weakness: 'Short reasons', xp: 12, streak: 3
+  });
+  Gym.saveProfile(profile, gymStore);
+  profile = Gym.noteTurn(Gym.loadProfile(gymStore), { speaker: 'user', text: 'I freeze before client meetings' });
+  profile = Gym.noteTurn(profile, { speaker: 'aria', text: 'We can practice that.' });
+  Gym.saveProfile(profile, gymStore);
+  assert(/client meetings/.test(Gym.summaryText(Gym.loadProfile(gymStore))));
+  assert(/client meetings/.test(Gym.handoffContext(Gym.loadProfile(gymStore))));
+  assert(Gym.asksReturn('where were we'));
+  assert(/client meetings/.test(Gym.returnLine(Gym.loadProfile(gymStore))));
+  profile = Gym.noteTurn(Gym.loadProfile(gymStore), { speaker: 'user', text: 'where were we' });
+  assert(/client meetings/.test(profile.topic));
+  assert.equal(Gym.STEPS.join(','), 'explain,demo,scenario,response,adapt,evaluate,feedback,example,retry,record,next');
+  assert.equal(Gym.MODES.join(','), 'conversation,coaching,challenge,freetalk');
+  let board = Gym.putCoach({}, 'marcus', Object.assign(Gym.blankCoach(), { step: 'evaluate', mode: 'challenge' }));
+  const opened = Gym.amaraBeat(Gym.blankCoach(), '', { explain: Lib.methodLine('amara', { topic: 'the magic moment' }) });
+  assert.equal(opened.state.step, 'explain');
+  assert(/Morning walks make my whole day better/.test(opened.say) && /kids wake up/.test(opened.say));
+  assert(!/first claim/i.test(opened.say) && !/one claim, then one reason/i.test(opened.say));
+  const demo = Gym.amaraBeat(opened.state, 'I want to sound clearer because I rush');
+  assert.equal(demo.state.step, 'demo');
+  assert(!/first claim/i.test(demo.say));
+  board = Gym.putCoach(board, 'amara', demo.state);
+  assert.equal(board.marcus.step, 'evaluate');
+  assert.equal(board.marcus.mode, 'challenge');
+  const weak = Gym.amaraBeat(Object.assign(Gym.blankCoach(), { step: 'response' }), 'ok', { score: () => ({ overall: 20, tip: 'Add a reason.' }) });
+  assert.equal(weak.state.step, 'adapt');
+  assert(/push back/i.test(weak.say));
+  const gymStrong = Gym.amaraBeat(weak.state, 'Morning pages steady me because the house is quiet', { score: () => ({ overall: 82, tip: 'That reason holds.' }) });
+  assert.equal(gymStrong.state.step, 'retry');
+  assert(/Feedback/.test(gymStrong.say) && /Improved example/.test(gymStrong.say) && /Evaluate/.test(gymStrong.say));
+  const done = Gym.amaraBeat(gymStrong.state, 'next', { now: 5, topic: 'meetings' });
+  assert.equal(done.state.step, 'record');
+  assert(done.lesson && done.lesson.status === 'recorded' && done.lesson.coach === 'amara');
+  const gymKept = Gym.applyLesson(Gym.loadProfile(gymStore), done.lesson, { xp: 12, streak: 3 });
+  const marked = Gym.noteProgress(gymKept, 'amara', done.state);
+  Gym.saveProfile(marked, gymStore);
+  Gym.saveBoard(board, gymStore);
+  assert(Gym.loadProfile(gymStore).lessons.some(l => l.status === 'recorded'));
+  assert.equal(Gym.loadProfile(gymStore).lessons.find(l => l.id === 'amara-live').step, 'record');
+  Gym.deleteProfile(gymStore);
+  assert.equal(Gym.loadProfile(gymStore).objectives.length, 0);
+  assert.equal(Gym.loadProfile(gymStore).summary, '');
+  assert(bag['brimmesa.learner.marcus'] && JSON.parse(bag['brimmesa.learner.marcus']).domains.cia === 80);
+  assert.equal(Gym.loadBoard(gymStore).marcus.mode, 'challenge');
+  assert.equal(Gym.loadBoard(gymStore).amara.step, 'demo');
+  Gym.deleteBoard(gymStore);
+  assert.equal(Object.keys(Gym.loadBoard(gymStore)).length, 0);
+  assert(bag['brimmesa.learner.marcus']);
+
   console.log('\nALL TESTS PASSED');
 })().catch(err => { console.error('FAIL', err); process.exit(1); });

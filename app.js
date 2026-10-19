@@ -622,8 +622,7 @@
     $('log').append(d);
     $('log').scrollTop = 1e9;
     pushComic(line);
-    spokenRecent.push({ speaker: line.speaker, text: String(line.text || '').slice(0, 160) });
-    if (spokenRecent.length > 8) spokenRecent.shift();
+    rememberSpoken(line);
   }
   function pushComic(line) {
     const box = $('comic');
@@ -669,6 +668,26 @@
   }
   let opener = '', openerHeard = false, loopRun = null, hostSession = null, hostLock = false;
   const spokenRecent = [];
+  if (window.BrimGym) (BrimGym.loadProfile().recent || []).forEach(t => spokenRecent.push({ speaker: t.speaker, text: t.text }));
+  function rememberSpoken(line) {
+    spokenRecent.push({ speaker: line.speaker, text: String(line.text || '').slice(0, 160) });
+    if (spokenRecent.length > 8) spokenRecent.shift();
+    try {
+      if (!window.BrimGym) return;
+      const last = spokenRecent[spokenRecent.length - 1];
+      BrimGym.saveProfile(BrimGym.noteTurn(BrimGym.loadProfile(), last));
+    } catch (e) {}
+  }
+  function coachMode(id) {
+    if (!window.BrimGym || !id) return 'conversation';
+    return BrimGym.coachOf(BrimGym.loadBoard(), id).mode;
+  }
+  function touchCoach(id, patch) {
+    if (!window.BrimGym || !id) return;
+    const board = BrimGym.loadBoard();
+    const row = Object.assign(BrimGym.coachOf(board, id), patch || {});
+    BrimGym.saveBoard(BrimGym.putCoach(board, id, row));
+  }
   function idleCaption() {
     if (opener) {
       $('bubbleName').textContent = 'Aria';
@@ -772,6 +791,11 @@
     if (liveWork && liveWork.owner !== ownerNow()) releaseWork();
     if (loopRun && loopRun.waiting && liveWork && liveWork.owner === ownerNow()) { await continueLoop(value); return; }
     if (quiz && liveWork && liveWork.kind === 'library-quiz' && liveWork.owner === ownerNow()) { await gradeQuiz(value); return; }
+    if (window.BrimGym && BrimGym.asksReturn(value)) {
+      const who = hostSession && hostSession.coachId ? hostSession.coachId : 'aria';
+      await play([{ speaker: who, text: BrimGym.returnLine(BrimGym.loadProfile()) }]);
+      return;
+    }
     if (hostSession && !eng.act && !loopRun) { await coachTurn(value); return; }
     if (!eng.act && (eng.mode === 'menu' || eng.mode === 'askname' || eng.mode === 'area')) {
       const intent = await detectIntent(value);
@@ -896,6 +920,7 @@
     if (name === 'scenarios') renderScenarios();
     if (name === 'library') renderLibrary();
     if (name === 'progress') renderProgress();
+    if (name !== 'map') hideTalk();
     syncPresenter(document.body.dataset.voice || 'idle', '');
     if (face) face.setVisible(false);
     const shell = document.querySelector('.shell');
@@ -1566,6 +1591,7 @@
   }
   function renderProgress() {
     if ($('progressLead')) $('progressLead').textContent = eng.progressSummary();
+    renderProfile();
     const list = $('progressList');
     if (!list) return;
     list.replaceChildren();
@@ -2138,7 +2164,11 @@
     return /\b(back to aria|return to aria|back to the map|talk to aria)\b/i.test(text);
   }
   function ariaSummary() {
-    return spokenRecent.slice(-4).map(l => (l.speaker === 'user' ? 'User' : l.speaker) + ': ' + l.text).join(' | ');
+    const recent = spokenRecent.slice(-4).map(l => (l.speaker === 'user' ? 'User' : l.speaker) + ': ' + l.text).join(' | ');
+    const rolled = window.BrimGym ? BrimGym.summaryText(BrimGym.loadProfile()) : '';
+    if (!rolled) return recent;
+    if (!recent) return rolled;
+    return (rolled + ' | ' + recent).slice(0, 500);
   }
   async function detectIntent(text) {
     const fallback = BrimLibrary.keywordIntent(text);
@@ -2195,6 +2225,10 @@
   }
   function guestOpen(coach, handoff) {
     if (hostSession) hostSession.teachStep = 'invite';
+    if (window.BrimGym && coachMode(coach.id) === 'coaching') {
+      const row = BrimGym.coachOf(BrimGym.loadBoard(), coach.id);
+      touchCoach(coach.id, { mode: 'coaching', topic: handoff.topic || row.topic, step: row.updated ? row.step : 'explain' });
+    }
     const line = BrimLibrary.methodLine(coach.id, {
       topic: handoff.topic,
       goal: handoff.goal,
@@ -2207,7 +2241,8 @@
     return aside + ' ' + line;
   }
   async function returnToAria() {
-    const topic = (hostSession && (hostSession.topic || hostSession.lastTopic)) || '';
+    const rolled = window.BrimGym ? BrimGym.loadProfile() : null;
+    const topic = (hostSession && (hostSession.topic || hostSession.lastTopic)) || (rolled && rolled.topic) || '';
     const last = (hostSession && hostSession.lastExchange) || '';
     const who = hostSession ? ((cast.find(c => c.id === hostSession.coachId) || {}).name || '') : '';
     releaseWork();
@@ -2314,6 +2349,12 @@
       await beginChallenge('marcus-cia');
       return;
     }
+    if (coachMode('marcus') === 'challenge' && !/\b(quiz|challenge|teach|phish)\b/.test(t)) {
+      learner.lastTopic = (hostSession && hostSession.topic) || value.slice(0, 80);
+      saveLearner(learner);
+      await play([{ speaker: 'marcus', text: 'Challenge mode. Say challenge for the CIA set, or quiz for five questions. I will not start it until you say so.' }]);
+      return;
+    }
     learner.lastTopic = (hostSession && hostSession.topic) || value.slice(0, 80);
     saveLearner(learner);
     await marcusSpeak(value);
@@ -2342,6 +2383,12 @@
       await play([{ speaker: coach.id, text: BrimLibrary.methodReply(coach.id, value) }]);
       return;
     }
+    const mode = coachMode(coach.id);
+    if (mode === 'coaching' && coach.id === 'amara') { await amaraCoachTurn(coach, value); return; }
+    if (mode === 'challenge' && coach.id === 'amara') {
+      await play([{ speaker: 'amara', text: BrimGym.challengeBeat(value) }]);
+      return;
+    }
     const hits = lib.search(value + ' ' + (hostSession.topic || ''), { coach: coach.id, limit: 3 });
     const quiet = hits.length && hits[0].citeInConversation === false;
     const wantsLesson = hits.length && /\b(explain|teach|what is|what's|difference|how does|tell me about)\b/i.test(value);
@@ -2362,6 +2409,8 @@
             'Not every turn is a lesson. Answer questions, humor, and tangents in your own voice.',
             'Never demand an exercise before you have explained it.',
             'Aria introduced this person. Goal: ' + (hostSession.goal || 'none') + '. Topic: ' + (hostSession.topic || 'none') + '.',
+            'Preferred speaking style: ' + (window.BrimGym ? BrimGym.loadProfile().preferredStyle : 'direct') + '.',
+            mode === 'freetalk' ? 'Mode: free talk. Answer in your own voice. Do not assign the next lesson step.' : '',
             'Aria context: ' + (hostSession.ariaSummary || 'none'),
             'Reply in one to three spoken sentences. No markdown. Write the brand as Brimmesa.',
             'They said: ' + value.slice(0, 400)
@@ -2373,8 +2422,32 @@
     }
     if (!text && wantsLesson) text = scriptedFromNotes(coach, hits[0]);
     if (!text) text = BrimLibrary.methodReply(coach.id, value);
-    if (hostSession) hostSession.teachStep = /\bskip ahead\b/i.test(value) ? 'invite' : 'coach';
+    if (hostSession) hostSession.teachStep = mode === 'freetalk' ? 'invite' : 'coach';
     await play([{ speaker: coach.id, text: text }]);
+  }
+  async function amaraCoachTurn(coach, value) {
+    const board = BrimGym.loadBoard();
+    const state = BrimGym.coachOf(board, 'amara');
+    const beat = BrimGym.amaraBeat(state, value, {
+      topic: (hostSession && hostSession.topic) || state.topic,
+      now: Date.now(),
+      explain: BrimLibrary.methodLine('amara', {
+        topic: (hostSession && hostSession.topic) || '',
+        goal: (hostSession && hostSession.goal) || '',
+        heard: value,
+        experienced: experienceFor('amara') === 'experienced'
+      }),
+      score: text => BrimLibrary.rubric(text, { keywords: ['because', 'reason', 'claim'], practiceKeywords: ['because'] }, 'explain')
+    });
+    BrimGym.saveBoard(BrimGym.putCoach(board, 'amara', beat.state));
+    let profile = BrimGym.loadProfile();
+    if (beat.lesson) profile = BrimGym.applyLesson(profile, beat.lesson, { xp: eng.p.xp, streak: eng.p.streak });
+    profile = BrimGym.noteProgress(profile, 'amara', beat.state);
+    profile.xp = eng.p.xp || 0;
+    profile.streak = eng.p.streak || 0;
+    BrimGym.saveProfile(profile);
+    if (hostSession) hostSession.teachStep = beat.state.step;
+    await play([{ speaker: coach.id, text: beat.say }]);
   }
   async function coachTurn(value) {
     if (hostSession) hostSession.lastExchange = String(value || '').slice(0, 160);
@@ -2422,6 +2495,7 @@
     }
     if ($('talkName')) $('talkName').textContent = coach.name;
     if ($('talkLine')) $('talkLine').textContent = line || coach.role || '';
+    syncMode(coach.id);
     if (coach.id !== 'amara') {
       if ($('talkMount')) $('talkMount').replaceChildren();
       return;
@@ -2431,6 +2505,51 @@
       new Promise(resolve => setTimeout(() => resolve(null), 1600))
     ]);
     if (api && img) img.style.visibility = 'hidden';
+  }
+  function syncMode(id) {
+    const sel = $('coachMode');
+    const pick = $('modePick');
+    if (!sel || !window.BrimGym) return;
+    if (pick) pick.hidden = !id || id === 'aria';
+    sel.value = coachMode(id);
+    sel.onchange = () => {
+      const board = BrimGym.loadBoard();
+      const row = BrimGym.coachOf(board, id);
+      row.mode = sel.value;
+      BrimGym.saveBoard(BrimGym.putCoach(board, id, row));
+    };
+  }
+  function renderProfile() {
+    const box = $('profileReview');
+    if (!box || !window.BrimGym) return;
+    const p = BrimGym.loadProfile();
+    const skills = (p.skills || []).map(s => (s.name || s.id || 'skill') + (s.level != null ? ' ' + s.level : '')).join('; ');
+    const lessons = (p.lessons || []).map(l => (l.title || 'Lesson') + ' (' + (l.step || l.status || '') + ')').join('; ');
+    const rows = [
+      ['Lessons', lessons || 'None yet'],
+      ['Skills', skills || 'None saved'],
+      ['Strengths', (p.strengths || []).join('; ') || 'None yet'],
+      ['Working on', (p.weaknesses || []).join('; ') || 'None yet'],
+      ['XP', String(p.xp || 0)],
+      ['Streak', String(p.streak || 0) + ' day'],
+      ['Objectives', (p.objectives || []).join('; ') || 'None yet'],
+      ['Style', p.preferredStyle || 'direct'],
+      ['Topic', p.topic || 'None yet']
+    ];
+    box.replaceChildren();
+    rows.forEach(pair => {
+      const row = el('div', 'profile-row');
+      row.append(el('strong', null, pair[0]), el('span', null, pair[1]));
+      box.append(row);
+    });
+    if ($('profileStyle')) $('profileStyle').value = p.preferredStyle || 'direct';
+  }
+  function profileSkills() {
+    return Object.keys(eng.p.mastery || {}).map(k => ({
+      id: k,
+      name: eng.skillTitle(k),
+      level: (eng.p.mastery[k] && eng.p.mastery[k].best) || 0
+    }));
   }
   function meetAria() {
     const aria = cast.find(c => c.id === 'aria');
@@ -2533,6 +2652,49 @@
     } catch (e) {}
   }
   if ($('backAria')) $('backAria').onclick = () => { if (hostSession) returnToAria(); };
+  if ($('profileForm')) $('profileForm').onsubmit = e => {
+    e.preventDefault();
+    if (!window.BrimGym) return;
+    const next = BrimGym.editProfile(BrimGym.loadProfile(), {
+      preferredStyle: $('profileStyle') ? $('profileStyle').value : 'direct',
+      objective: $('profileObjective') ? $('profileObjective').value : '',
+      strength: $('profileStrength') ? $('profileStrength').value : '',
+      weakness: $('profileWeakness') ? $('profileWeakness').value : '',
+      xp: eng.p.xp || 0,
+      streak: eng.p.streak || 0,
+      skills: profileSkills()
+    });
+    BrimGym.saveProfile(next);
+    if ($('profileObjective')) $('profileObjective').value = '';
+    if ($('profileStrength')) $('profileStrength').value = '';
+    if ($('profileWeakness')) $('profileWeakness').value = '';
+    if ($('profileDelete')) { $('profileDelete').dataset.armed = ''; $('profileDelete').textContent = 'Delete learner profile'; }
+    renderProfile();
+  };
+  if ($('profileDelete')) $('profileDelete').onclick = () => {
+    if (!window.BrimGym) return;
+    if ($('profileDelete').dataset.armed !== '1') {
+      $('profileDelete').dataset.armed = '1';
+      $('profileDelete').textContent = 'Confirm delete';
+      return;
+    }
+    BrimGym.deleteProfile();
+    $('profileDelete').dataset.armed = '';
+    $('profileDelete').textContent = 'Delete learner profile';
+    renderProfile();
+  };
+  if ($('coachStateDelete')) $('coachStateDelete').onclick = () => {
+    if (!window.BrimGym) return;
+    if ($('coachStateDelete').dataset.armed !== '1') {
+      $('coachStateDelete').dataset.armed = '1';
+      $('coachStateDelete').textContent = 'Confirm clear';
+      return;
+    }
+    BrimGym.deleteBoard();
+    $('coachStateDelete').dataset.armed = '';
+    $('coachStateDelete').textContent = 'Clear coaching steps';
+    renderProfile();
+  };
 
   setupMap();
   showWorld('map');

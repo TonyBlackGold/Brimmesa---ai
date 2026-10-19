@@ -256,6 +256,77 @@ function overlaps(a, b) {
   }));
   assert(figures.amara && figures.jasmine && figures.depth);
 
+  await page2.evaluate(() => {
+    localStorage.setItem('brimmesa.learner.marcus', JSON.stringify({ met: true, domains: { cia: 80 } }));
+    const board = BrimGym.loadBoard();
+    const marcus = BrimGym.coachOf(board, 'marcus');
+    marcus.step = 'evaluate';
+    marcus.mode = 'challenge';
+    let next = BrimGym.putCoach(board, 'marcus', marcus);
+    const amara = BrimGym.coachOf(next, 'amara');
+    amara.mode = 'coaching';
+    amara.step = 'response';
+    next = BrimGym.putCoach(next, 'amara', amara);
+    BrimGym.saveBoard(next);
+    const sel = document.getElementById('coachMode');
+    if (sel) sel.value = 'coaching';
+  });
+  await page2.evaluate(() => document.getElementById('typeBtn').click());
+  await page2.waitForSelector('#typeRow:not([hidden])');
+  await page2.type('#txt', 'ok');
+  await page2.$eval('#typeRow', form => form.requestSubmit());
+  await page2.waitForFunction(() => /push back/i.test(document.getElementById('log').textContent), { timeout: 8000 });
+  const isolated = await page2.evaluate(() => {
+    const board = BrimGym.loadBoard();
+    const profile = BrimGym.loadProfile();
+    return {
+      amara: board.amara && board.amara.step,
+      marcus: board.marcus && board.marcus.step,
+      marcusMode: board.marcus && board.marcus.mode,
+      cia: JSON.parse(localStorage.getItem('brimmesa.learner.marcus')).domains.cia,
+      summary: profile.summary || '',
+      live: (profile.lessons || []).some(l => l.id === 'amara-live' && l.step === 'adapt')
+    };
+  });
+  assert.equal(isolated.amara, 'adapt');
+  assert.equal(isolated.marcus, 'evaluate');
+  assert.equal(isolated.marcusMode, 'challenge');
+  assert.equal(isolated.cia, 80);
+  assert(isolated.live);
+  assert(/ok/.test(isolated.summary));
+  const switched = await page2.evaluate(() => {
+    const sel = document.getElementById('coachMode');
+    sel.value = 'freetalk';
+    sel.dispatchEvent(new Event('change'));
+    const board = BrimGym.loadBoard();
+    return { amara: board.amara.mode, marcus: board.marcus.mode };
+  });
+  assert.equal(switched.amara, 'freetalk');
+  assert.equal(switched.marcus, 'challenge');
+  await page2.click('#tabProgress');
+  await page2.type('#profileObjective', 'Speak up at work');
+  await page2.$eval('#profileForm', form => form.requestSubmit());
+  await page2.waitForFunction(() => /Speak up at work/.test(document.getElementById('profileReview').textContent));
+  await page2.$eval('#profileDelete', el => el.scrollIntoView({ block: 'center' }));
+  const deleteHit = await page2.evaluate(() => {
+    const el = document.getElementById('profileDelete');
+    const b = el.getBoundingClientRect();
+    const top = document.elementFromPoint(b.left + Math.min(12, b.width / 2), b.top + b.height / 2);
+    return { id: top && top.id, cls: top && top.className, y: Math.round(b.top), h: Math.round(b.height) };
+  });
+  assert.equal(deleteHit.id, 'profileDelete', 'Delete is covered ' + JSON.stringify(deleteHit));
+  await page2.$eval('#profileDelete', el => el.click());
+  assert.equal(await page2.$eval('#profileDelete', n => n.textContent), 'Confirm delete');
+  await page2.$eval('#profileDelete', el => el.click());
+  const afterDelete = await page2.evaluate(() => ({
+    profile: localStorage.getItem('brimmesa.learner.profile.v1'),
+    marcus: JSON.parse(localStorage.getItem('brimmesa.learner.marcus')).domains.cia,
+    review: document.getElementById('profileReview').textContent
+  }));
+  assert.equal(afterDelete.profile, null);
+  assert.equal(afterDelete.marcus, 80);
+  assert(!/Speak up at work/.test(afterDelete.review));
+
   console.log('AUDIT UI PASSED');
   await browser.close();
 })().catch(err => { console.error('AUDIT UI FAIL', err); process.exit(1); });
