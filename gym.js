@@ -14,7 +14,7 @@
     return {
       lessons: [], skills: [], strengths: [], weaknesses: [],
       xp: 0, streak: 0, objectives: [], preferredStyle: 'direct',
-      topic: '', summary: '', recent: []
+      topic: '', thread: '', summary: '', recent: []
     };
   }
   function blankCoach() {
@@ -32,6 +32,7 @@
     p.objectives = strings(raw.objectives, 8, 180);
     p.preferredStyle = STYLES.indexOf(raw.preferredStyle) >= 0 ? raw.preferredStyle : 'direct';
     p.topic = String(raw.topic || '').slice(0, 80);
+    p.thread = String(raw.thread || '').slice(0, 120);
     p.summary = String(raw.summary || '').slice(0, 420);
     p.recent = Array.isArray(raw.recent) ? raw.recent.slice(-8).map(t => ({
       speaker: String((t && t.speaker) || 'user').slice(0, 24),
@@ -101,15 +102,20 @@
     const text = String((turn && turn.text) || '').slice(0, 160);
     if (!text) return p;
     p.recent = p.recent.concat([{ speaker: speaker, text: text }]).slice(-8);
-    if (speaker === 'user' && !asksReturn(text)) p.topic = text.slice(0, 80);
-    p.summary = compress(p.topic, p.recent);
+    if (speaker === 'user' && !asksReturn(text)) {
+      if (/\b(change subject|new topic)\b/i.test(text)) p.thread = '';
+      else if (!p.thread && text.split(/\s+/).filter(Boolean).length >= 4) p.thread = text.slice(0, 120);
+      p.topic = text.slice(0, 80);
+    }
+    p.summary = compress(p.thread || p.topic, p.recent);
     return p;
   }
   function summaryText(profile) { return normalizeProfile(profile).summary; }
   function returnLine(profile) {
     const p = normalizeProfile(profile);
-    if (!p.topic && !p.summary) return 'We have not landed on a topic yet. Tell me what you want to practice.';
-    return 'We were on this: ' + (p.topic || p.summary) + '. Want to pick it back up?';
+    const focus = p.thread || p.topic;
+    if (!focus && !p.summary) return 'We have not landed on a topic yet. Tell me what you want to practice.';
+    return 'We were on this: ' + (focus || p.summary) + '. Want to pick it back up?';
   }
   function handoffContext(profile) { return normalizeProfile(profile).summary; }
 

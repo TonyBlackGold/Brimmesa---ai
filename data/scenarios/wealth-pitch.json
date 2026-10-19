@@ -2,13 +2,21 @@
   "id": "wealth-pitch",
   "skill": "wealth.pitch",
   "feedbackLabel": "the business pitch",
-  "setting": "You are across a small table from Aria, an investor. You have about a minute. Pitch who you help, what it costs them today, and the next step you want.",
-  "sceneNote": "Adults only. Respectful practice. No sexual content, no pressure, no appearance ratings, no contact details, no private meetups. Aria is a calm investor hearing a short business pitch. She asks practical questions. She does not offer money on the spot.",
+  "setting": "You are across a small table from Amara. You have about a minute. Pitch who you help, what it costs them today, and the next step you want. She hears the pitch and asks practical questions.",
+  "sceneNote": "Adults only. Respectful practice. No sexual content, no pressure, no appearance ratings, no contact details, no private meetups. Amara is across the table hearing a short business pitch. She asks practical questions. She does not offer money on the spot. She is not Aria.",
+  "goalRubric": {
+    "goal": "Say who you help, what it costs today, and the next step.",
+    "criteria": [
+      { "id": "who", "label": "Who you help", "words": ["help", "customer", "client", "people"] },
+      { "id": "cost", "label": "Cost today", "words": ["cost", "price", "pay", "spend", "save"] },
+      { "id": "step", "label": "Next step", "words": ["next", "step", "call", "meeting", "try"] }
+    ]
+  },
   "characters": [
     {
-      "id": "aria",
-      "name": "Aria",
-      "trait": "warm, encouraging, specific",
+      "id": "amara",
+      "name": "Amara",
+      "trait": "steady, practical, specific",
       "voice": {
         "pitch": 1.05,
         "rate": 1,
@@ -99,67 +107,67 @@
   "responses": {
     "open_good": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "I am listening. Who is this for, and what changes for them?"
       }
     ],
     "open_flat": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "Start with the person you serve. I do not need the whole history."
       }
     ],
     "context": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "That problem is clear. What do they pay, in time or money, while it stays unsolved?"
       }
     ],
     "question": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "Good question to turn back on me. Here is mine: why you, and why now?"
       }
     ],
     "humor": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "That landed. Keep that ease, then give me the number."
       }
     ],
     "intro": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "Good. I know who I am talking to. What is the offer in one sentence?"
       }
     ],
     "inclusive": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "I like that you asked what I need to see. Show me the next step, not the whole company."
       }
     ],
     "pushy": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "That is too much pressure for a first meeting. We can stop here."
       }
     ],
     "neutral": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "Say it more plainly. Who do you help, and what do you want from me?"
       }
     ],
     "exit": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "Thank you. Send the one-page version and we can look at a real next step."
       }
     ],
     "timeout": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "I have what I need for now. Close with the ask, then we are done."
       }
     ]

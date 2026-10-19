@@ -716,5 +716,118 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
   assert.equal(Object.keys(Gym.loadBoard(gymStore)).length, 0);
   assert(bag['brimmesa.learner.marcus']);
 
+  console.log('9) barge-in, rubric estimate, scorecard, walk settle, tests A and C');
+  const Vad = require('./vad.js');
+  const Delivery = require('./delivery.js');
+  const Harness = require('./harness.js');
+  assert.deepEqual(Vad.MIC_CONSTRAINTS.audio, { echoCancellation: true, noiseSuppression: true, autoGainControl: true });
+  assert.equal(Vad.MIC_CONSTRAINTS.video, false);
+  let hot = Vad.vadStep(null, 0.08, 1000);
+  assert.equal(hot.speaking, false);
+  hot = Vad.vadStep(hot, 0.08, 1200);
+  assert.equal(hot.speaking, true);
+  assert.equal(Vad.isEcho('this is amara at mindset', 'This is Amara, at Mindset and Purpose.'), true);
+  assert.equal(Vad.isEcho('hello there', 'This is Amara'), false);
+  const blockedMic = Vad.recognitionRestart('not-allowed', { restarts: 0 });
+  assert.equal(blockedMic.restart, false);
+  assert.equal(blockedMic.giveUp, true);
+  const noSpeech = Vad.recognitionRestart('no-speech', { restarts: 1 });
+  assert.equal(noSpeech.restart, true);
+  assert.equal(noSpeech.delay, 300);
+  const restartCap = Vad.recognitionRestart('end', { restarts: 8 });
+  assert.equal(restartCap.reason, 'restart-cap');
+  assert.equal(Vad.recognitionRestart('aborted', { intentional: true }).restart, false);
+  assert.equal(Vad.recognitionRestart('network', { restarts: 2 }).delay, 600);
+
+  const est = Delivery.goalEstimate('I will practice the goal because it matters and the next step is tomorrow', content['goal-talk'], { goal: true });
+  assert.equal(est.source, 'estimate');
+  assert(/Estimate, not a model score/.test(Delivery.formatGoal(est)));
+  assert(est.criteria.length === 3 && est.criteria.every(c => c.score >= 1 && c.score <= 5));
+  assert(est.fix);
+  assert.equal(Delivery.readGoal('{"score":"nope"}', content['spice-aisle']), null);
+  const goodRaw = JSON.stringify({
+    criteria: Delivery.criteriaFor(content['goal-talk']).criteria.map(c => ({ id: c.id, score: 4, evidence: 'because it matters' })),
+    fix: 'Name the next action in one sentence.'
+  });
+  const parsedGoal = Delivery.readGoal(goodRaw, content['goal-talk']);
+  assert.equal(parsedGoal.source, 'gemini');
+  assert.equal(parsedGoal.score100, 80);
+  const card = Delivery.deliveryCard([
+    { text: 'Um I will start', start: 0, end: 2000 },
+    { text: 'the next step', start: 3200, end: 5000 }
+  ], 'Um I will start the next step');
+  assert(card.wpm != null && card.pauseCount >= 1);
+  assert(/Scorecard/.test(Delivery.formatCard(card)));
+  assert(!/confidence|emotion|energy|warmth/i.test(Delivery.formatCard(card)));
+  const untimed = Delivery.deliveryCard([{ text: 'hello there friend' }], 'hello there friend');
+  assert.equal(untimed.wpm, null);
+  assert(/not measured/.test(Delivery.formatCard(untimed)));
+
+  const movedCam = world.settleAfterError({ x: 70, y: 40 }, { x: 20, y: 20 });
+  assert(movedCam.ms === 400 && movedCam.scale === 1.85);
+  assert(Math.hypot(movedCam.x - 20, movedCam.y - 20) > 1);
+  const homeCam = world.settleAfterError({ x: 58, y: 52 }, { x: 22, y: 30 });
+  assert.equal(homeCam.x, 22);
+  assert.equal(homeCam.y, 30);
+  assert.equal(homeCam.ms, 700);
+  assert(homeCam.ms > 0 && movedCam.ms > 0);
+
+  assert.equal(content['goal-talk'].characters[0].id, 'amara');
+  assert.equal(content['wealth-pitch'].characters[0].id, 'amara');
+  assert.equal(content['travel-order'].characters[0].id, 'renee');
+  assert(/cafe abroad/i.test(content['travel-order'].setting));
+  assert.equal(content['health-gym'].characters[0].id, 'jordan');
+  assert(!/I am Aria/i.test(JSON.stringify(content['health-gym'])));
+  assert(!/I am Aria/i.test(JSON.stringify(content['travel-order'])));
+  assert.equal(content['health-gym'].responses.intro[0].speaker, 'jordan');
+  assert(/I am Jordan/.test(content['health-gym'].responses.intro[0].text));
+  assert(/I am Renee/.test(content['travel-order'].responses.intro[0].text));
+
+  const { createLLMProvider: lineFactory } = require('./engine.js');
+  const caster = lineFactory({});
+  const keptLines = caster.normalizeLines([
+    { speaker: 'amara', text: 'Hold the goal.' },
+    { speaker: 'jordan', text: 'The rack is free.' }
+  ], ['amara', 'jordan'], false);
+  assert.equal(keptLines.length, 2);
+  assert.equal(keptLines[0].speaker, 'coach');
+  assert.equal(keptLines[1].speaker, 'jordan');
+
+  const goalEng = new Engine({ worlds, content, profile: newProfile(), now });
+  goalEng.act = goalEng.activities().find(a => a.id === 'goal-talk');
+  goalEng.mode = 'scenario';
+  goalEng.activeCoach = 'amara';
+  goalEng.s = {
+    turn: 1, hit: { context: true },
+    said: 'My goal is to speak up because it matters and the next step is tomorrow',
+    utterances: [{ text: 'My goal is to speak up because it matters and the next step is tomorrow', start: 1000, end: 5000 }]
+  };
+  const goalLines = goalEng.endScenario();
+  const goalSpoken = goalLines.map(l => l.text).join(' ');
+  assert.equal(goalEng.lastGoal.source, 'estimate');
+  assert(/Estimate, not a model score/.test(goalSpoken));
+  assert(/Scorecard/.test(goalSpoken));
+  assert(goalEng.lastDelivery && goalEng.lastDelivery.wpm != null);
+  assert(!/confidence|emotion/i.test(Delivery.formatCard(goalEng.lastDelivery)));
+
+  const simA = Harness.runA(() => 1000000);
+  assert(simA.span >= 5 * 60 * 1000);
+  assert(/client meetings/.test(simA.profile.summary));
+  assert(/client meetings/.test(simA.profile.thread));
+  assert(simA.marks.some(m => m.stage === 'stt-end'));
+  assert(simA.marks.some(m => m.stage === 'llm-complete' && /no key/i.test(m.note)));
+  assert(simA.marks.some(m => m.stage === 'tts-start'));
+  const sumA = Harness.summarize(simA.marks);
+  console.log('  Test A span ms', simA.span, 'marks', sumA.count, 'avg gap ms', sumA.avgGapMs);
+
+  const simC = await Harness.runC(worlds, content, now);
+  assert(/Question 1/.test(simC.taught));
+  assert(/Question 2/.test(simC.follow));
+  assert(simC.first && simC.first.q && simC.follow.indexOf(simC.first.q) < 0);
+  assert(simC.card && simC.card.wpm != null);
+  assert(!/confidence|emotion/i.test(Delivery.formatCard(simC.card)));
+  const sumC = Harness.summarize(simC.marks);
+  console.log('  Test C marks', sumC.count, 'avg gap ms', sumC.avgGapMs);
+
   console.log('\nALL TESTS PASSED');
 })().catch(err => { console.error('FAIL', err); process.exit(1); });

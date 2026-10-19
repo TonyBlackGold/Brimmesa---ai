@@ -54,7 +54,17 @@
     return { x: last[0], y: last[1], dx: last[0] - prev[0], dy: last[1] - prev[1] };
   }
 
-  const geom = { depthAt: depthAt, spritePx: spritePx, cameraTarget: cameraTarget, jawAmount: jawAmount, pathLength: pathLength, pointAt: pointAt };
+  function settleAfterError(walker, dest) {
+    const dx = dest && isFinite(Number(dest.x)) ? Number(dest.x) : 58;
+    const dy = dest && isFinite(Number(dest.y)) ? Number(dest.y) : 52;
+    const x = walker && isFinite(Number(walker.x)) ? Number(walker.x) : dx;
+    const y = walker && isFinite(Number(walker.y)) ? Number(walker.y) : dy;
+    const moved = !!(walker && Math.hypot(x - 58, y - 52) > 4);
+    if (moved) return { x: x, y: y, scale: 1.85, ms: 400 };
+    return { x: dx, y: dy, scale: 2.05, ms: 700 };
+  }
+
+  const geom = { depthAt: depthAt, spritePx: spritePx, cameraTarget: cameraTarget, jawAmount: jawAmount, pathLength: pathLength, pointAt: pointAt, settleAfterError: settleAfterError };
 
   let doc = null;
   let loading = null;
@@ -439,6 +449,22 @@
     if (entranceTimer) clearTimeout(entranceTimer);
     entranceTimer = 0;
   }
+  function fail() {
+    session += 1;
+    mode = 'idle';
+    dropSkip();
+    hideTrail();
+    clearFollow();
+    if (entranceTimer) clearTimeout(entranceTimer);
+    entranceTimer = 0;
+  }
+  function walkerPos() {
+    if (!walker) return null;
+    const x = parseFloat(walker.style.left);
+    const y = parseFloat(walker.style.top);
+    if (!isFinite(x) || !isFinite(y)) return null;
+    return { x: x, y: y };
+  }
   function placeHome(gen) {
     const aria = doc && doc.aria;
     if (!aria) return;
@@ -496,6 +522,8 @@
     cueCorner: cueCorner,
     play: play,
     cancel: cancel,
+    fail: fail,
+    walkerPos: walkerPos,
     wasSkipped: wasSkipped,
     entrance: entrance,
     resize: resizeAll

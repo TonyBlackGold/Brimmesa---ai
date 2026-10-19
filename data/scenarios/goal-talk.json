@@ -2,13 +2,21 @@
   "id": "goal-talk",
   "skill": "mindset.goal",
   "feedbackLabel": "the goal-setting practice",
-  "setting": "Aria is your coach for this rep. Say one goal out loud, why it matters, and the next action you will take when nobody is clapping. She will not accept a vague wish.",
-  "sceneNote": "Adults only. Respectful practice. No sexual content, no pressure, no appearance ratings, no contact details, no private meetups. Aria is a warm coach. She helps the user say one clear goal and one next action. She does not lecture.",
+  "setting": "Amara is your coach for this rep. Say one goal out loud, why it matters, and the next action you will take when nobody is clapping. She will not accept a vague wish.",
+  "sceneNote": "Adults only. Respectful practice. No sexual content, no pressure, no appearance ratings, no contact details, no private meetups. Amara is the coach in the room. She helps the user say one clear goal and one next action. She does not lecture. She is not Aria.",
+  "goalRubric": {
+    "goal": "Say one clear goal, why it matters, and the next action.",
+    "criteria": [
+      { "id": "goal", "label": "Clear goal", "words": ["goal", "will", "want", "going to"] },
+      { "id": "why", "label": "Why it matters", "words": ["because", "so", "matters", "reason"] },
+      { "id": "next", "label": "Next action", "words": ["next", "tomorrow", "today", "first", "will"] }
+    ]
+  },
   "characters": [
     {
-      "id": "aria",
-      "name": "Aria",
-      "trait": "warm, encouraging, specific",
+      "id": "amara",
+      "name": "Amara",
+      "trait": "warm, specific, steady",
       "voice": {
         "pitch": 1.05,
         "rate": 1,
@@ -96,67 +104,67 @@
   "responses": {
     "open_good": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "Say the goal in one sentence. I will help you make it small enough to keep."
       }
     ],
     "open_flat": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "Start with the goal, not the mood. What are you unwilling to drop?"
       }
     ],
     "context": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "That is concrete. What gets in the way on an ordinary Tuesday?"
       }
     ],
     "question": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "Ask me to hold you to it. The next action should fit in thirty minutes."
       }
     ],
     "humor": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "Good. You can tell the truth and still be kind to yourself."
       }
     ],
     "intro": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "I hear who this is for. Now the action, not the identity."
       }
     ],
     "inclusive": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "You left room to adjust. Pick the version you will still do on a bad day."
       }
     ],
     "pushy": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "We do not bully a goal into existing. Slow down and say the real one."
       }
     ],
     "neutral": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "Make it smaller. One rep you can finish."
       }
     ],
     "exit": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "That is a promise I can remember. Do the first step, then tell me how it went."
       }
     ],
     "timeout": [
       {
-        "speaker": "aria",
+        "speaker": "amara",
         "text": "Enough for this rep. Keep the sentence, and do the first ten minutes."
       }
     ]

@@ -247,8 +247,9 @@ function overlaps(a, b) {
     b.scrollIntoView({ block: 'center' });
     b.click();
   });
-  await page2.waitForFunction(() => document.body.dataset.walk === 'arrived' || document.body.dataset.walk === 'trail', { timeout: 8000 });
-  await page2.waitForFunction(() => /Morning walks/i.test(document.getElementById('log').textContent), { timeout: 10000 });
+  await page2.waitForSelector('.walk-skip', { timeout: 8000 });
+  await page2.click('.walk-skip');
+  await page2.waitForFunction(() => /This is Amara, at Mindset/i.test(document.getElementById('log').textContent) && /Morning walks/i.test(document.getElementById('log').textContent), { timeout: 10000 });
   const figures = await page2.evaluate(() => ({
     amara: !!document.querySelector('.cast-figure[data-coach="amara"]'),
     jasmine: !!document.querySelector('.cast-figure[data-coach="jasmine"]'),

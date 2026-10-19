@@ -11,6 +11,12 @@
   const ELEVEN_USAGE = 'brimmesa.eleven.usage';
   const GEMINI_DEFAULT = 'gemini-3.5-flash-lite';
   const $ = id => document.getElementById(id);
+  const latencyMarks = [];
+  function markLatency(stage, note) {
+    latencyMarks.push({ stage: stage, t: Date.now(), note: note || '' });
+    if (latencyMarks.length > 120) latencyMarks.shift();
+  }
+  window.BrimLatency = { mark: markLatency, marks: latencyMarks };
   const worlds = await (await fetch('data/worlds.json')).json();
   const areasDoc = await (await fetch('data/areas.json')).json();
   const castDoc = await (await fetch('data/characters.json')).json();
@@ -50,6 +56,12 @@
     readMemory() { return readJSON(GEMINI_TURNS, []); },
     writeMemory(m) { localStorage.setItem(GEMINI_TURNS, JSON.stringify((m || []).slice(-10))); }
   });
+  const rawGenerate = llm.generate.bind(llm);
+  llm.generate = async function (prompt, schema) {
+    markLatency('llm-start', 'generateContent is not streamed');
+    try { return await rawGenerate(prompt, schema); }
+    finally { markLatency('llm-complete', 'generateContent returns the full body, so first byte is the completion'); }
+  };
   if (llm.enabled) eng.provider = llm;
   const ttsCache = new Map();
   function openTtsDb() {
@@ -507,6 +519,8 @@
     const timed = plan && plan.visemes && plan.visemes.length
       ? plan
       : BrimSpeech.fitWords(spoken, Math.round((buffer.duration || 0.3) * 1000));
+    markLatency('tts-start', 'buffered speech');
+    ttsOnset = performance.now();
     const moving = face && isAmara(line.speaker);
     if (moving) {
       face.speak({
@@ -598,6 +612,8 @@
     const spoken = BrimSpeech.spokenText(text, engine);
     let pitch = cfg.pitch || 1, rate = (cfg.rate || 1) * (eng.p.driving ? 1.05 : 1);
     if (voices.length < 2 && line.speaker !== 'coach') pitch = Math.min(2, Math.max(0.1, 1 + (pitch - 1) * 1.8));
+    markLatency('tts-start', 'browser speech');
+    ttsOnset = performance.now();
     const moving = face && isAmara(line.speaker);
     if (moving) face.speak(spoken, { rate, pitch, emotion: line.emotion || null });
     else drivePulse(roughPulse(spoken, rate));
@@ -605,6 +621,11 @@
     stopPulse();
   }
   let stopSpeaking = false, busy = false, playId = 0, greeted = false, listening = false, gotResult = false, misses = 0;
+  let vadStream = null, vadCtx = null, vadAnalyser = null, vadTimer = 0, ttsOnset = 0, recStartedAt = 0;
+  let vadState = { hotSince: 0, speaking: false, coolSince: 0 };
+  let recIntentional = false, lastRecError = '', lastCoachLine = '', pendingHeard = null;
+  let recRestarts = [];
+  function handsFreeOn() { return !!($('auto') && $('auto').checked); }
   function show(line) {
     const c = chars[line.speaker] || chars.coach;
     const d = el('div', 'l ' + (line.speaker === 'user' ? 'user' : line.speaker));
@@ -709,9 +730,11 @@
   }
   async function play(lines) {
     const id = ++playId;
-    busy = true; stopSpeaking = false; stopListening();
+    busy = true; stopSpeaking = false; ttsOnset = 0;
+    if (!handsFreeOn()) stopListening();
     for (const l of lines || []) {
       const shown = present(l);
+      if (shown && shown.speaker !== 'user') lastCoachLine = shown.text || '';
       show(shown); setCaption(shown);
       if (l.emotion && face) face.react(l.emotion);
       setAvatarState('speaking', { speaker: shown.speaker });
@@ -724,7 +747,26 @@
     setAvatarState('idle', { speaker: (last && last.speaker) || 'aria' });
     busy = false;
     save();
-    if ($('auto').checked && rec && !loopRun && !hostLock && lines && lines.length && document.visibilityState === 'visible') setTimeout(listen, 250);
+    if ((lines || []).some(l => l && /Scorecard\./.test(l.text || ''))) showScorecard();
+    if (handsFreeOn() && rec && !loopRun && !hostLock && lines && lines.length && document.visibilityState === 'visible') {
+      if (!listening) setTimeout(listen, 250);
+      openVad();
+    }
+  }
+  function showScorecard() {
+    const box = $('scorecard');
+    const body = $('scorecardBody');
+    if (!box || !body) return;
+    const D = window.BrimDelivery;
+    if (!D || (!eng.lastGoal && !eng.lastDelivery) || eng.mode === 'scenario' || eng.mode === 'quiz' || eng.mode === 'drill') {
+      box.hidden = true;
+      return;
+    }
+    const parts = [];
+    if (eng.lastGoal) parts.push(D.formatGoal(eng.lastGoal));
+    if (eng.lastDelivery) parts.push(D.formatCard(eng.lastDelivery));
+    body.textContent = parts.join(' ');
+    box.hidden = false;
   }
   let liveWork = null;
   function releaseWork() {
@@ -810,6 +852,8 @@
       const factual = await factualReply(value);
       if (factual) { play([{ speaker: 'aria', text: factual }]); return; }
     }
+    if (pendingHeard) { eng._heard = pendingHeard; pendingHeard = null; }
+    else { eng._heard = null; markLatency('stt-end', 'typed'); }
     const lines = await eng.handle(value);
     if (eng.act && eng.act.id === 'current-affairs' && eng.s && eng.s.turn === 0) await dressAffairs(lines);
     if (eng.act) {
@@ -834,33 +878,138 @@
     if (face) face.interrupt();
   }
 
+  function canBarge() { return !!(busy && ttsOnset && (performance.now() - ttsOnset) >= 350); }
+  function recentRestartCount() {
+    const nowMs = Date.now();
+    recRestarts = recRestarts.filter(t => nowMs - t < 10000);
+    return recRestarts.length;
+  }
+  function releaseVad() {
+    if (vadTimer) cancelAnimationFrame(vadTimer);
+    vadTimer = 0;
+    if (vadStream) { try { vadStream.getTracks().forEach(t => t.stop()); } catch (e) {} }
+    vadStream = null;
+    if (vadCtx) { try { vadCtx.close(); } catch (e) {} }
+    vadCtx = null;
+    vadAnalyser = null;
+    vadState = { hotSince: 0, speaking: false, coolSince: 0 };
+  }
+  function pumpVad() {
+    if (!vadAnalyser || !window.BrimVad) return;
+    const bytes = new Uint8Array(vadAnalyser.fftSize || 512);
+    try { vadAnalyser.getByteTimeDomainData(bytes); } catch (e) { return; }
+    vadState = BrimVad.vadStep(vadState, BrimVad.rmsFromTimeDomain(bytes), performance.now());
+    if (vadState.speaking && canBarge()) interrupt();
+    vadTimer = requestAnimationFrame(pumpVad);
+  }
+  async function openVad() {
+    if (vadStream || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.BrimVad) return false;
+    try {
+      vadStream = await navigator.mediaDevices.getUserMedia(BrimVad.MIC_CONSTRAINTS);
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) { releaseVad(); return false; }
+      vadCtx = new AC();
+      if (vadCtx.state === 'suspended') { try { await vadCtx.resume(); } catch (e) {} }
+      const src = vadCtx.createMediaStreamSource(vadStream);
+      vadAnalyser = vadCtx.createAnalyser();
+      vadAnalyser.fftSize = 512;
+      src.connect(vadAnalyser);
+      pumpVad();
+      return true;
+    } catch (e) {
+      releaseVad();
+      return false;
+    }
+  }
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let rec = null;
   if (SR && window.isSecureContext) {
-    rec = new SR(); rec.lang = 'en-US'; rec.interimResults = false; rec.maxAlternatives = 1; rec.continuous = false;
-    rec.onresult = e => { gotResult = true; misses = 0; send(e.results[e.results.length - 1][0].transcript); };
+    rec = new SR();
+    rec.lang = 'en-US';
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+    rec.continuous = false;
+    rec.onresult = e => {
+      let interim = '';
+      let finalText = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const bit = (e.results[i][0] && e.results[i][0].transcript) || '';
+        if (e.results[i].isFinal) finalText += bit;
+        else interim += bit;
+      }
+      const Vad = window.BrimVad;
+      if (interim && canBarge()) {
+        const words = interim.trim().split(/\s+/).filter(Boolean);
+        if (words.length >= 2 && !(Vad && Vad.isEcho(interim, lastCoachLine))) interrupt();
+      }
+      const said = finalText.trim();
+      if (!said) return;
+      if (Vad && Vad.isEcho(said, lastCoachLine)) return;
+      gotResult = true;
+      misses = 0;
+      pendingHeard = { start: recStartedAt || (Date.now() - 800), end: Date.now() };
+      markLatency('stt-end', 'recognition final');
+      send(said);
+    };
     rec.onend = () => {
-      listening = false; $('mic').classList.remove('on');
-      if (document.body.dataset.voice === 'listening') setAvatarState('idle', { speaker: 'coach' });
-      if (!gotResult && !busy && $('auto').checked && misses < 6 && document.visibilityState === 'visible') { misses++; setTimeout(listen, 300); }
+      listening = false;
+      $('mic').classList.remove('on');
+      const intentional = recIntentional;
+      recIntentional = false;
+      if (document.body.dataset.voice === 'listening' && !busy) setAvatarState('idle', { speaker: 'coach' });
+      const keep = handsFreeOn() && !hostLock && misses < 99 && document.visibilityState === 'visible';
+      if (!keep || intentional || !window.BrimVad) return;
+      const decision = BrimVad.recognitionRestart(lastRecError || (gotResult ? 'end' : 'no-speech'), { intentional: false, restarts: recentRestartCount() });
+      lastRecError = '';
+      if (decision.giveUp) {
+        if (decision.reason === 'restart-cap') $('note').textContent = 'The microphone kept restarting. Tap to talk when you are ready.';
+        if (decision.reason === 'blocked') $('note').textContent = 'Microphone blocked. Tap the lock icon in the address bar and allow the microphone.';
+        return;
+      }
+      if (decision.restart) {
+        recRestarts.push(Date.now());
+        setTimeout(listen, decision.delay);
+      }
     };
     rec.onerror = e => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      lastRecError = (e && e.error) || '';
+      if (lastRecError === 'not-allowed' || lastRecError === 'service-not-allowed') {
         misses = 99;
         $('note').textContent = 'Microphone blocked. Tap the lock icon in the address bar and allow the microphone.';
+      }
+      if (lastRecError === 'audio-capture' && vadStream) {
+        releaseVad();
+        $('note').textContent = 'Voice detection released the microphone so speech recognition can keep it. Press to talk still works, and a clear phrase still cuts the coach off.';
       }
     };
   } else $('note').textContent = !window.isSecureContext
     ? 'Microphone needs a secure (https) link. You can type for now.'
     : 'Speech recognition is not supported in this browser (use Chrome). You can type instead. The coach still talks.';
   function listen() {
-    if (!rec || listening || busy) return;
+    if (!rec || listening) return;
+    if (busy && !handsFreeOn()) return;
     gotResult = false;
-    try { rec.start(); listening = true; $('mic').classList.add('on'); setAvatarState('listening', { speaker: 'coach' }); } catch (e) {}
+    recIntentional = false;
+    try {
+      rec.start();
+      listening = true;
+      recStartedAt = Date.now();
+      $('mic').classList.add('on');
+      setAvatarState('listening', { speaker: 'coach' });
+    } catch (e) {
+      if (e && /InvalidStateError/i.test(String(e.name || e.message || ''))) listening = true;
+    }
   }
-  function stopListening() { if (rec && listening) { try { rec.abort(); } catch (e) {} listening = false; $('mic').classList.remove('on'); } }
+  function stopListening() {
+    if (!(rec && listening)) return;
+    recIntentional = true;
+    try { rec.abort(); } catch (e) {}
+    listening = false;
+    $('mic').classList.remove('on');
+  }
   $('mic').onclick = () => {
     unlockAudio();
+    openVad();
     if (!openerHeard) {
       openerHeard = true;
       greeted = true;
@@ -878,6 +1027,12 @@
       return;
     }
     misses = 0;
+    recRestarts = [];
+    if (busy) {
+      interrupt();
+      listen();
+      return;
+    }
     if (listening) { misses = 99; stopListening(); setAvatarState('idle', { speaker: 'coach' }); return; }
     interrupt();
     listen();
@@ -885,6 +1040,7 @@
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') {
       stopListening();
+      releaseVad();
       if (synth) synth.cancel();
       return;
     }
@@ -998,6 +1154,8 @@
       return;
     }
     releaseWork();
+    const card = $('scorecard');
+    if (card) card.hidden = true;
     const coachId = coachForActivity(a);
     eng.activeCoach = coachId;
     liveWork = { owner: coachId, kind: a.type, lessonId: a.id };
@@ -2569,11 +2727,16 @@
           trip = { walked: !!walked, skipped: !!(BrimWalk.wasSkipped && BrimWalk.wasSkipped()) };
         }
       } catch (e) {
-        if (BrimWalk.cancel) BrimWalk.cancel();
+        trip.failed = true;
+        if (BrimWalk.fail) BrimWalk.fail();
+        else if (BrimWalk.cancel) BrimWalk.cancel();
       }
     }
-    if (!trip.walked && dest && window.BrimMap) window.BrimMap.focus(dest.x, dest.y);
-    if (!trip.skipped && INTRO[coach.id]) await play(INTRO[coach.id]);
+    if (trip.failed && dest && window.BrimMap && window.BrimWorld && BrimWorld.settleAfterError) {
+      const spot = BrimWorld.settleAfterError(BrimWalk.walkerPos ? BrimWalk.walkerPos() : null, dest);
+      if (BrimMap.look) BrimMap.look(spot.x, spot.y, spot.scale, { ms: spot.ms });
+    } else if (!trip.walked && dest && window.BrimMap) window.BrimMap.focus(dest.x, dest.y);
+    if (INTRO[coach.id]) await play(INTRO[coach.id]);
     await showTalk(coach);
     return trip;
   }

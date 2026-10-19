@@ -2,13 +2,21 @@
   "id": "health-gym",
   "skill": "health.gym",
   "feedbackLabel": "the gym conversation",
-  "setting": "You are at a gym between sets. Aria is training nearby. Ask to share the equipment, or start a short, respectful conversation about the workout. Keep it light.",
-  "sceneNote": "Adults only. Respectful practice. No sexual content, no pressure, no appearance ratings, no contact details, no private meetups. Aria is another adult at the gym. Friendly, not a date. No comments about bodies.",
+  "setting": "You are at a gym between sets. Jordan is training nearby. Ask to share the equipment, or start a short, respectful conversation about the workout. Keep it light.",
+  "sceneNote": "Adults only. Respectful practice. No sexual content, no pressure, no appearance ratings, no contact details, no private meetups. Jordan is another adult at the gym, not a coach and not Aria. Friendly, not a date. No comments about bodies.",
+  "goalRubric": {
+    "goal": "Ask respectfully, stay on the workout, and close lightly.",
+    "criteria": [
+      { "id": "ask", "label": "Respectful ask", "words": ["please", "mind if", "may i", "could", "share"] },
+      { "id": "workout", "label": "Workout topic", "words": ["set", "workout", "rack", "training", "gym"] },
+      { "id": "close", "label": "Light close", "words": ["thanks", "thank", "enjoy", "have a good"] }
+    ]
+  },
   "characters": [
     {
-      "id": "aria",
-      "name": "Aria",
-      "trait": "warm, encouraging, specific",
+      "id": "jordan",
+      "name": "Jordan",
+      "trait": "friendly gym peer, not a coach",
       "voice": {
         "pitch": 1.05,
         "rate": 1,
@@ -97,67 +105,67 @@
   "responses": {
     "open_good": [
       {
-        "speaker": "aria",
+        "speaker": "jordan",
         "text": "Hey. I have one set left. Want to work in?"
       }
     ],
     "open_flat": [
       {
-        "speaker": "aria",
+        "speaker": "jordan",
         "text": "Hi. Did you need the rack, or were you saying hello?"
       }
     ],
     "context": [
       {
-        "speaker": "aria",
+        "speaker": "jordan",
         "text": "Same program problem. I keep the rests honest or the last sets fall apart."
       }
     ],
     "question": [
       {
-        "speaker": "aria",
+        "speaker": "jordan",
         "text": "I like that question. I am just trying to leave stronger than I arrived. You?"
       }
     ],
     "humor": [
       {
-        "speaker": "aria",
+        "speaker": "jordan",
         "text": "Ha. Yes. Confidence in here is mostly just showing up again."
       }
     ],
     "intro": [
       {
-        "speaker": "aria",
-        "text": "Nice to meet you. I am Aria. I train early so the rest of the day stays mine."
+        "speaker": "jordan",
+        "text": "Nice to meet you. I am Jordan. I train early so the rest of the day stays mine."
       }
     ],
     "inclusive": [
       {
-        "speaker": "aria",
+        "speaker": "jordan",
         "text": "Thanks for asking instead of hovering. The rack is yours after this set."
       }
     ],
     "pushy": [
       {
-        "speaker": "aria",
+        "speaker": "jordan",
         "text": "That is not a gym conversation I want. I am going back to my set."
       }
     ],
     "neutral": [
       {
-        "speaker": "aria",
+        "speaker": "jordan",
         "text": "All good. A simple hello works in here."
       }
     ],
     "exit": [
       {
-        "speaker": "aria",
+        "speaker": "jordan",
         "text": "Nice talking. Have a good session. I will leave the rack how I found it."
       }
     ],
     "timeout": [
       {
-        "speaker": "aria",
+        "speaker": "jordan",
         "text": "I should finish this set. Good luck with the workout."
       }
     ]

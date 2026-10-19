@@ -1,5 +1,10 @@
 // BRIMMESA AI engine: pure logic, no DOM. Works in browser (window.BrimEngine) and Node (module.exports).
 (function (root) {
+  let Delivery = null;
+  try {
+    if (typeof module !== 'undefined' && module.exports) Delivery = require('./delivery.js');
+  } catch (e) { Delivery = null; }
+  if (!Delivery && root && root.BrimDelivery) Delivery = root.BrimDelivery;
   const DAY = 86400000;
   const has = (t, list) => (list || []).some(w => t.includes(w));
   const dayKey = (ts) => new Date(ts).toISOString().slice(0, 10);
@@ -194,7 +199,12 @@
       if (this.act && this.s && this.act.id !== a.id) this.exitActivity();
       this.act = a; this.mode = a.type; const c = this.content[a.id];
       touchStreak(this.p, this.now());
-      if (a.type === 'scenario') { this.s = { turn: 0, hit: {}, ended: false, lessonId: a.id }; return [this.C(c.setting)]; }
+      if (a.type === 'scenario') {
+        this.lastGoal = null;
+        this.lastDelivery = null;
+        this.s = { turn: 0, hit: {}, ended: false, lessonId: a.id, said: '', utterances: [] };
+        return [this.C(c.setting)];
+      }
       if (a.type === 'drill') { this.s = { round: 0, scores: [], lessonId: a.id }; return [this.C(c.intro)]; }
       if (a.type === 'quiz') {
         const n = this.p.driving ? 3 : c.lessonSize;
@@ -215,6 +225,15 @@
     // scenarioTurn keeps the scripted lines and the scripted score.
     advanceScenario(text, t) {
       const c = this.content[this.act.id], s = this.s, sig = c.signals, R = c.responses;
+      const heard = this._heard;
+      this._heard = null;
+      s.said = ((s.said || '') + ' ' + text).trim().slice(0, 2000);
+      s.utterances = s.utterances || [];
+      s.utterances.push({
+        text: text,
+        start: heard && heard.start != null ? heard.start : null,
+        end: heard && heard.end != null ? heard.end : null
+      });
       const out = [];
       s.turn++;
       const found = Object.keys(sig).filter(k => has(t, sig[k]));
@@ -240,8 +259,25 @@
       const c = this.content[this.act.id], hit = this.s.hit;
       let score = c.rubric.reduce((a, r) => a + (hit[r.id] ? r.points : 0), 0);
       const pen = c.penalties.filter(p => hit[p.id]); pen.forEach(p => score -= p.points); score = Math.max(0, score);
-      const good = c.rubric.filter(r => hit[r.id]).map(r => r.label.toLowerCase());
-      const tips = pen.map(p => p.tip).concat(c.rubric.filter(r => !hit[r.id]).map(r => r.tip)).slice(0, 2);
+      let good = c.rubric.filter(r => hit[r.id]).map(r => r.label.toLowerCase());
+      let tips = pen.map(p => p.tip).concat(c.rubric.filter(r => !hit[r.id]).map(r => r.tip)).slice(0, 2);
+      const legacy = this._legacyScore;
+      this._legacyScore = null;
+      if (legacy && Number.isFinite(legacy.score)) {
+        score = legacy.score;
+        if (legacy.strengths && legacy.strengths.length) good = legacy.strengths;
+        if (legacy.tips && legacy.tips.length) tips = legacy.tips;
+      }
+      const said = (this.s && this.s.said) || '';
+      let goal = this._modelGoal || null;
+      this._modelGoal = null;
+      if (goal && goal.source === 'gemini' && Number.isFinite(goal.score100)) score = goal.score100;
+      else if (!goal && Delivery) goal = Delivery.goalEstimate(said, c, hit);
+      const card = Delivery ? Delivery.deliveryCard((this.s && this.s.utterances) || [], said) : null;
+      this.lastGoal = goal;
+      this.lastDelivery = card;
+      this._speakGoal = goal;
+      this._speakCard = card;
       const label = c.feedbackLabel || 'the spice aisle scenario';
       return this.finish(c.skill, score, good, tips, label);
     }
@@ -325,17 +361,23 @@
       const scene = this.act && this.content[this.act.id];
       let dims = '';
       if (scene && scene.dimensions && this.s && this.s.hit) {
-        const bits = scene.dimensions.map(d => {
+        const bits = scene.dimensions.filter(d => !/confidence|emotion|energy|warmth/i.test(String(d.label || ''))).map(d => {
           const ids = d.signals || [];
           const got = ids.filter(id => this.s.hit[id]).length;
           return d.label + ' ' + Math.round(100 * got / Math.max(1, ids.length));
         });
-        dims = ' Scores: ' + bits.join(', ') + '.';
+        if (bits.length) dims = ' Scores: ' + bits.join(', ') + '.';
       }
+      const speakGoal = this._speakGoal || null;
+      const speakCard = this._speakCard || null;
+      this._speakGoal = null;
+      this._speakCard = null;
+      const rubricLine = Delivery && speakGoal ? ' ' + Delivery.formatGoal(speakGoal) : '';
+      const cardLine = Delivery && speakCard ? ' ' + Delivery.formatCard(speakCard) : '';
       const who = this.activeCoach || 'coach';
       this.mode = 'menu'; this.act = null; this.activeCoach = null;
       const extra = (r.improved ? ' That beats your personal best, so you earn bonus XP!' : '') + (r.levelUp ? ` Level up! You're now level ${level(this.p.xp)}.` : '');
-      return [this.line(who, `Coach feedback on ${fb}${dims} You earned ${r.xp} XP.${extra}`), this.menuPrompt()];
+      return [this.line(who, `Coach feedback on ${fb}${dims}${rubricLine}${cardLine} You earned ${r.xp} XP.${extra}`), this.menuPrompt()];
     }
     progressSummary() {
       const p = this.p, parts = Object.entries(p.mastery).filter(([, v]) => v && v.best !== undefined).map(([k, v]) => `${this.skillTitle(k)} best ${v.best}`);
@@ -345,7 +387,7 @@
 
   const GEMINI_MODEL = 'gemini-3.5-flash-lite';
   const EMOTIONS = ['laugh', 'concern', 'smile', 'surprise'];
-  const SPEAKERS = { amara: 'coach', coach: 'coach', aria: 'aria', jasmine: 'jasmine', renee: 'renee', marcus: 'marcus' };
+  const SPEAKERS = { amara: 'coach', coach: 'coach', aria: 'aria', jasmine: 'jasmine', renee: 'renee', marcus: 'marcus', jordan: 'jordan' };
   const RATE_LINE = "Google's free tier is rate-limited right now. I'll use the practice script for this turn.";
   const ALLOWANCE_LINE = "That's today's free AI allowance. I'll keep going from the practice script until tomorrow.";
   const LINES_SCHEMA = {
@@ -365,6 +407,25 @@
       }
     },
     required: ['lines']
+  };
+  const GOAL_SCHEMA = {
+    type: 'OBJECT',
+    properties: {
+      criteria: {
+        type: 'ARRAY',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            id: { type: 'STRING' },
+            score: { type: 'INTEGER' },
+            evidence: { type: 'STRING' }
+          },
+          required: ['id', 'score', 'evidence']
+        }
+      },
+      fix: { type: 'STRING' }
+    },
+    required: ['criteria', 'fix']
   };
   const SCORE_SCHEMA = {
     type: 'OBJECT',
@@ -495,8 +556,9 @@
       const out = [];
       for (const item of arr) {
         if (!item) continue;
-        const speaker = SPEAKERS[String(item.speaker || '').toLowerCase()];
-        if (!speaker || (allowed && allowed.indexOf(speaker) < 0)) continue;
+        const rawId = String(item.speaker || '').toLowerCase();
+        const speaker = SPEAKERS[rawId];
+        if (!speaker || (allowed && allowed.indexOf(speaker) < 0 && allowed.indexOf(rawId) < 0)) continue;
         const text = this.clip(item.text, driving);
         if (!text) continue;
         const line = { speaker, text };
@@ -591,7 +653,12 @@
           scene.sceneNote || 'Adults only. This is a respectful coaching scene in a grocery spice aisle. No sexual content, no pressure, no appearance ratings, no contact details, no private meetups.',
           'If the user is pushy, the characters set a short boundary and stop the chat.',
           'Do not speak as the user. Speak only as: ' + castIds.join(', ') + '.',
-          castIds.map(id => this.persona(id)).join('\n'),
+          castIds.map(id => {
+            const known = this.persona(id);
+            if (known !== id) return known;
+            const ch = (scene.characters || []).find(c => c.id === id);
+            return ch ? ((ch.name || id) + ': ' + (ch.trait || 'scene character')) : id;
+          }).join('\n'),
           'Scene: ' + (scene.setting || ''),
           this.lengthRule(eng),
           'Return JSON {"lines":[{"speaker":"' + castIds[0] + '","text":"...","emotion":"smile"}]}. emotion is smile, concern, laugh, or surprise. One to three lines, each one speaker.',
@@ -608,11 +675,10 @@
       }
       let tail = [];
       if (preview.ended) {
-        const c = scene;
         const scored = limited ? null : await this.scoreScenario(ctx, eng, preview);
-        const label = c.feedbackLabel || 'the spice aisle scenario';
-        if (scored) tail = eng.finish(c.skill, scored.score, scored.strengths, scored.tips, label);
-        else tail = eng.endScenario();
+        eng._modelGoal = scored && scored.goal ? scored.goal : null;
+        eng._legacyScore = scored && scored.legacy ? scored : null;
+        tail = eng.endScenario();
       }
       const spoken = (limited ? [{ speaker: 'coach', text: RATE_LINE }] : []).concat(npc, tail);
       if (talked) this.remember(ctx.text, spoken.filter(l => l.text !== RATE_LINE));
@@ -620,21 +686,26 @@
     },
     async scoreScenario(ctx, eng, preview) {
       const c = eng.content[eng.act.id];
+      const spec = Delivery ? Delivery.criteriaFor(c) : { criteria: c.rubric || [] };
       const prompt = [
-        'Score this adult practice scene. Return JSON with integer score from 0 to 100, strengths, and tips.',
-        'Rubric: ' + (c.rubric || []).map(r => r.id + ' ' + r.points + ' ' + r.label).join('; '),
-        'Penalties: ' + (c.penalties || []).map(p => p.id + ' -' + p.points + ' ' + p.label).join('; '),
+        'Score this adult practice scene.',
+        'Return JSON {"criteria":[{"id":"the id","score":3,"evidence":"a short quote from the user"}],"fix":"one sentence"}.',
+        'Each score is an integer from 1 to 5. Evidence is a short quote from what the user said. Give one fix only.',
+        'Criteria: ' + (spec.criteria || []).map(r => r.id + ' ' + (r.label || '')).join('; '),
         'Signals noticed in the user text: ' + (preview.found || []).join(', '),
-        'No sexual content in the tips. Two short phrases at most for strengths and for tips.',
-        'User said: ' + ctx.text
+        'No sexual content. Do not score confidence, emotion, energy, or warmth.',
+        'User said: ' + ((eng.s && eng.s.said) || ctx.text)
       ].join('\n');
       try {
-        const j = this.parseJSON(await this.generate(prompt, SCORE_SCHEMA)) || {};
+        const raw = await this.generate(prompt, GOAL_SCHEMA);
+        const goal = Delivery && Delivery.readGoal(raw, c);
+        if (goal) return { goal: goal };
+        const j = this.parseJSON(raw) || {};
         const score = Number(j.score);
         if (!Number.isFinite(score) || score < 0 || score > 100) return null;
         const strengths = (Array.isArray(j.strengths) ? j.strengths : []).map(s => String(s).slice(0, 80)).filter(Boolean).slice(0, 3);
         const tips = (Array.isArray(j.tips) ? j.tips : []).map(s => String(s).slice(0, 120)).filter(Boolean).slice(0, 2);
-        return { score: Math.round(score), strengths, tips };
+        return { legacy: true, score: Math.round(score), strengths, tips };
       } catch (e) { return null; }
     },
     async drill(ctx, eng) {

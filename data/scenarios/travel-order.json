@@ -2,13 +2,21 @@
   "id": "travel-order",
   "skill": "travel.order",
   "feedbackLabel": "the travel conversation",
-  "setting": "You are in a cafe abroad. Aria is the person at the counter. Order something simple, ask one question about the place or how to get to the station, and thank her.",
-  "sceneNote": "Adults only. Respectful practice. No sexual content, no pressure, no appearance ratings, no contact details, no private meetups. Aria works at a cafe in another city. She speaks clear English. Helpful, not a tour guide speech.",
+  "setting": "You are in a cafe abroad. Renee is the person at the counter. Order something simple, ask one question about the place or how to get to the station, and thank her.",
+  "sceneNote": "Adults only. Respectful practice. No sexual content, no pressure, no appearance ratings, no contact details, no private meetups. Renee works the counter at a cafe abroad. She speaks clear English. Helpful, not a tour guide speech. She is not Aria.",
+  "goalRubric": {
+    "goal": "Order something, ask about the station, and say thanks.",
+    "criteria": [
+      { "id": "order", "label": "Order", "words": ["coffee", "tea", "please", "order", "menu"] },
+      { "id": "station", "label": "Station question", "words": ["station", "train", "where", "how"] },
+      { "id": "thanks", "label": "Thanks", "words": ["thank", "thanks"] }
+    ]
+  },
   "characters": [
     {
-      "id": "aria",
-      "name": "Aria",
-      "trait": "warm, encouraging, specific",
+      "id": "renee",
+      "name": "Renee",
+      "trait": "clear, helpful, unhurried",
       "voice": {
         "pitch": 1.05,
         "rate": 1,
@@ -99,67 +107,67 @@
   "responses": {
     "open_good": [
       {
-        "speaker": "aria",
+        "speaker": "renee",
         "text": "Hello. What can I get you?"
       }
     ],
     "open_flat": [
       {
-        "speaker": "aria",
+        "speaker": "renee",
         "text": "Hi. Point to the menu if the words are hard. I can help."
       }
     ],
     "context": [
       {
-        "speaker": "aria",
+        "speaker": "renee",
         "text": "The station is a short walk. Order first, then I will point you."
       }
     ],
     "question": [
       {
-        "speaker": "aria",
+        "speaker": "renee",
         "text": "Good question. Leave here, go left, and the station is past the second square."
       }
     ],
     "humor": [
       {
-        "speaker": "aria",
+        "speaker": "renee",
         "text": "You are doing fine. Everyone asks the station question."
       }
     ],
     "intro": [
       {
-        "speaker": "aria",
-        "text": "Welcome. I am Aria. Take your time with the order."
+        "speaker": "renee",
+        "text": "Welcome. I am Renee. Take your time with the order."
       }
     ],
     "inclusive": [
       {
-        "speaker": "aria",
+        "speaker": "renee",
         "text": "Thank you for asking so clearly. People rush this part."
       }
     ],
     "pushy": [
       {
-        "speaker": "aria",
+        "speaker": "renee",
         "text": "I can help with the order and the directions. I cannot do more than that."
       }
     ],
     "neutral": [
       {
-        "speaker": "aria",
+        "speaker": "renee",
         "text": "Try the order in one sentence, then the question."
       }
     ],
     "exit": [
       {
-        "speaker": "aria",
+        "speaker": "renee",
         "text": "You are welcome. Enjoy it, and the station is to the left."
       }
     ],
     "timeout": [
       {
-        "speaker": "aria",
+        "speaker": "renee",
         "text": "Here is your order. Ask for the station whenever you are ready."
       }
     ]

@@ -476,6 +476,8 @@ button.ghost {
   border: 1px solid var(--line); background: #0e1014; color: var(--ink); padding: 8px;
 }
 .comic { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.scorecard { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: #14120e; }
+.scorecard p { margin: 4px 0; font-size: 13px; line-height: 1.35; color: var(--text, #f3efe4); }
 .panel {
   border: 3px solid #241c10; background: #f6f0e4; color: #1b140c; border-radius: 14px; padding: 10px 12px;
   box-shadow: 4px 4px 0 #3a2e18;
@@ -676,6 +678,10 @@ body:not([data-ready="1"]) #missionGo { pointer-events: none; }
           <ol id="loopDots"></ol>
         </div>
         <div id="comic" class="comic" aria-live="polite"></div>
+        <section id="scorecard" class="scorecard" hidden>
+          <p class="kicker">Scorecard</p>
+          <p id="scorecardBody"></p>
+        </section>
       </div>
     </section>
     <section id="viewMissions" class="view-panel" hidden>
@@ -852,7 +858,7 @@ body:not([data-ready="1"]) #missionGo { pointer-events: none; }
       </div>
       <p id="micLabel">Tap to Talk</p>
       <p class="hint" id="hearAria" hidden>Tap to hear Aria</p>
-      <p class="hint">Press, speak, and I'll respond.</p>
+      <p class="hint">Talk to cut them off.</p>
     </div>
     <button class="flank" id="viewBtn" type="button"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 6h14v9H8l-3 3V6z"/></svg></span>View conversation</button>
   </div>
@@ -888,6 +894,7 @@ body:not([data-ready="1"]) #missionGo { pointer-events: none; }
   <h3>Settings</h3>
   <label class="row"><input type="checkbox" id="drive"> Driving mode (short, audio only)</label>
   <label class="row"><input type="checkbox" id="auto" checked> Hands-free (keep listening)</label>
+  <p class="fine">Hands-free keeps the microphone on while a coach speaks. Your voice cuts the playback. Turn this off to press and talk.</p>
   <label class="row"><input type="checkbox" id="avatar3d" checked> Animated portrait</label>
   <label class="row"><input type="checkbox" id="tilt"> Phone tilt (a little parallax)</label>
   <p class="fine">The photo stays hers. Blinks, a small mouth, and a little sway run on this device. Off keeps the still portrait. Nothing is uploaded.</p>
@@ -947,6 +954,8 @@ body:not([data-ready="1"]) #missionGo { pointer-events: none; }
   </div>
 </dialog>
 
+<script src="vad.js"></script>
+<script src="delivery.js"></script>
 <script src="engine.js"></script>
 <script src="library.js"></script>
 <script src="context.js"></script>
