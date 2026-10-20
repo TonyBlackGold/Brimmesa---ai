@@ -17,6 +17,19 @@
     if (latencyMarks.length > 120) latencyMarks.shift();
   }
   window.BrimLatency = { mark: markLatency, marks: latencyMarks };
+  function applyHandsFreeDefault() {
+    const box = $('auto');
+    if (!box) return;
+    const saved = localStorage.getItem('brimmesa.handsfree');
+    const mobile = window.BrimVad ? !BrimVad.allowEnergyStream(navigator.userAgent || '', true) : /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent || '');
+    if (saved === '1' || saved === '0') box.checked = saved === '1';
+    else box.checked = !mobile;
+    box.addEventListener('change', () => {
+      localStorage.setItem('brimmesa.handsfree', box.checked ? '1' : '0');
+      if (!box.checked) releaseVad();
+    });
+  }
+  applyHandsFreeDefault();
   const worlds = await (await fetch('data/worlds.json')).json();
   const areasDoc = await (await fetch('data/areas.json')).json();
   const castDoc = await (await fetch('data/characters.json')).json();
@@ -625,7 +638,31 @@
   let vadState = { hotSince: 0, speaking: false, coolSince: 0 };
   let recIntentional = false, lastRecError = '', lastCoachLine = '', pendingHeard = null;
   let recRestarts = [];
+  let vadBlocked = false, armListen = false, track = null, spokeUntil = 0, audioFails = 0;
   function handsFreeOn() { return !!($('auto') && $('auto').checked); }
+  function useEnergyVad() {
+    return !vadBlocked && window.BrimVad && BrimVad.allowEnergyStream(navigator.userAgent || '', handsFreeOn());
+  }
+  function setStatus(state, detail) {
+    const el = $('voiceStatus');
+    if (!el) return;
+    const label = { listening: 'Listening', heard: 'Heard', thinking: 'Thinking', speaking: 'Speaking', error: 'Error', ready: 'Ready' }[state] || 'Ready';
+    const extra = detail ? ': ' + String(detail).replace(/\s+/g, ' ').trim().slice(0, 90) : '';
+    el.dataset.state = state || 'ready';
+    el.textContent = label + extra;
+    el.title = label + extra;
+  }
+  function leavesTrack(value) {
+    const t = String(value || '').trim();
+    if (wantsAria(t)) return true;
+    return /^(stop|quit|exit|menu|main menu|change subject|something else|i'm driving|im driving|driving mode on|driving mode off)$/i.test(t);
+  }
+  function offerTracks(lines) {
+    return (lines || []).map(l => {
+      if (!l || !/name a practice\./.test(l.text || '') || /vocabulary/.test(l.text || '')) return l;
+      return Object.assign({}, l, { text: String(l.text).replace('name a practice.', 'name a practice. Say vocabulary or public speaking.') });
+    });
+  }
   function show(line) {
     const c = chars[line.speaker] || chars.coach;
     const d = el('div', 'l ' + (line.speaker === 'user' ? 'user' : line.speaker));
@@ -729,29 +766,50 @@
     if (aria) aria.textContent = text;
   }
   async function play(lines) {
+    const spoken = offerTracks(lines && lines.length ? lines : [{ speaker: 'aria', text: 'I heard you. Tell me what you want to practice.' }]);
     const id = ++playId;
     busy = true; stopSpeaking = false; ttsOnset = 0;
     if (!handsFreeOn()) stopListening();
-    for (const l of lines || []) {
-      const shown = present(l);
-      if (shown && shown.speaker !== 'user') lastCoachLine = shown.text || '';
-      show(shown); setCaption(shown);
-      if (l.emotion && face) face.react(l.emotion);
-      setAvatarState('speaking', { speaker: shown.speaker });
-      if (id !== playId) return;
-      await speak(shown);
-      if (id !== playId) return;
+    setStatus('speaking', spoken[0] && spoken[0].text);
+    try {
+      for (const l of spoken) {
+        const shown = present(l);
+        if (shown && shown.speaker !== 'user') lastCoachLine = shown.text || '';
+        show(shown); setCaption(shown);
+        if (l.emotion && face) face.react(l.emotion);
+        setAvatarState('speaking', { speaker: shown.speaker });
+        if (id !== playId) return;
+        await speak(shown);
+        if (id !== playId) return;
+      }
+    } finally {
+      if (id === playId) {
+        const last = spoken.length ? present(spoken[spoken.length - 1]) : null;
+        setAvatarState('idle', { speaker: (last && last.speaker) || 'aria' });
+        busy = false;
+        spokeUntil = Date.now();
+        save();
+        if (spoken.some(l => l && /Scorecard\./.test(l.text || ''))) showScorecard();
+        settleMic();
+      }
     }
-    if (id !== playId) return;
-    const last = lines && lines.length ? present(lines[lines.length - 1]) : null;
-    setAvatarState('idle', { speaker: (last && last.speaker) || 'aria' });
-    busy = false;
-    save();
-    if ((lines || []).some(l => l && /Scorecard\./.test(l.text || ''))) showScorecard();
-    if (handsFreeOn() && rec && !loopRun && !hostLock && lines && lines.length && document.visibilityState === 'visible') {
+  }
+  function settleMic() {
+    if (hostLock || !rec || document.visibilityState === 'hidden') {
+      if (!listening) setStatus('ready', handsFreeOn() ? '' : 'Tap to talk');
+      return;
+    }
+    if (handsFreeOn()) {
       if (!listening) setTimeout(listen, 250);
-      openVad();
+      if (useEnergyVad()) openVad();
+      return;
     }
+    if (armListen) {
+      armListen = false;
+      setTimeout(listen, 200);
+      return;
+    }
+    setStatus('ready', 'Tap to talk');
   }
   function showScorecard() {
     const box = $('scorecard');
@@ -824,9 +882,21 @@
     if ($('micLabel')) $('micLabel').textContent = 'Tap to Talk';
     const named = BrimLibrary.keywordIntent(value);
     const leaving = wantsAria(value) || !!named;
-    if (!leaving && loopRun && !loopRun.waiting && liveWork && liveWork.owner === ownerNow()) return;
+    if (!leaving && !isTrackCommand(value) && loopRun && !loopRun.waiting && liveWork && liveWork.owner === ownerNow()) return;
     interrupt();
     show({ speaker: 'user', text: value });
+    setStatus('heard', value);
+    if (leavesTrack(value)) track = null;
+    else if (isTrackCommand(value) || track) {
+      try {
+        const handled = await routeTrack(value);
+        if (handled !== false) return;
+      } catch (e) {
+        setStatus('error', 'The practice reply failed.');
+        await play([{ speaker: 'aria', text: 'I heard you. I am still here. Say vocabulary or public speaking, or tell me what you want to practice.' }]);
+        return;
+      }
+    }
     if (leaving) releaseWork();
     if (wantsAria(value)) { await returnToAria(); return; }
     if (named) { await beginHandoff(named, value); return; }
@@ -848,13 +918,20 @@
       if (emotion && face) face.react(emotion);
     } catch (e) {}
     setAvatarState('thinking', { speaker: 'coach' });
+    setStatus('thinking');
     if (!eng.act && !quiz && !loopRun && window.BrimContext && BrimContext.asks(value)) {
       const factual = await factualReply(value);
-      if (factual) { play([{ speaker: 'aria', text: factual }]); return; }
+      if (factual) { await play([{ speaker: 'aria', text: factual }]); return; }
     }
     if (pendingHeard) { eng._heard = pendingHeard; pendingHeard = null; }
     else { eng._heard = null; markLatency('stt-end', 'typed'); }
-    const lines = await eng.handle(value);
+    let lines;
+    try { lines = await eng.handle(value); }
+    catch (e) {
+      setStatus('error', 'The reply failed.');
+      lines = [{ speaker: 'aria', text: 'I heard you. I hit a snag, so I am answering from the practice script. Tell me what you want to practice.' }];
+    }
+    if (!lines || !lines.length) lines = [{ speaker: 'aria', text: 'I heard you. Tell me what you want to practice.' }];
     if (eng.act && eng.act.id === 'current-affairs' && eng.s && eng.s.turn === 0) await dressAffairs(lines);
     if (eng.act) {
       const coachId = coachForActivity(eng.act);
@@ -864,7 +941,134 @@
     }
     if ((eng.mode === 'area' || eng.mode === 'reflect') && eng.area) { setRoute('#/area/' + eng.area.id); showArea(eng.area); }
     else showHome();
-    play(lines);
+    await play(lines);
+  }
+  function isTrackCommand(text) {
+    return /^(vocabulary|word of the day|public speaking)\b/i.test(String(text || '').trim());
+  }
+  async function vocabApi() {
+    if (!window.BrimVocab) return null;
+    if (!BrimVocab.byId('brief')) {
+      try { BrimVocab.load(await (await fetch('data/vocabulary.json')).json()); }
+      catch (e) { BrimVocab.load({ words: [], topics: [] }); }
+    }
+    return BrimVocab;
+  }
+  function saveVocab(state) {
+    if (!window.BrimGym) return;
+    const profile = BrimGym.loadProfile();
+    profile.vocab = state;
+    BrimGym.saveProfile(profile);
+  }
+  async function maybePersonalize(word) {
+    if (!word || !localStorage.getItem(GEMINI_KEY) || llm.overLimit()) return word;
+    try {
+      const raw = await llm.generate([
+        'Personalize one example sentence for an adult learner. Use the word exactly once.',
+        'Word: ' + word.word + '. Meaning: ' + word.meaning + '.',
+        'Goal: ' + (eng.p.goal || 'none') + '.',
+        'Return JSON {"example":"one sentence"} and nothing else.'
+      ].join('\n'), null);
+      const clean = String(raw || '').replace(/```json|```/g, '').trim();
+      let j = null;
+      try { j = JSON.parse(clean); } catch (e) {
+        const m = clean.match(/\{[\s\S]*\}/);
+        if (m) { try { j = JSON.parse(m[0]); } catch (e2) { j = null; } }
+      }
+      const example = j && String(j.example || '').replace(/\s+/g, ' ').trim().slice(0, 180);
+      if (example && new RegExp('\\b' + word.word + '\\b', 'i').test(example)) return Object.assign({}, word, { example: example });
+    } catch (e) {}
+    return word;
+  }
+  async function maybeTopic(fallback) {
+    if (!localStorage.getItem(GEMINI_KEY) || llm.overLimit()) return fallback;
+    try {
+      const raw = await llm.generate('One public-speaking topic, six words or fewer, for this goal: ' + (eng.p.goal || 'speaking clearly') + '. JSON {"topic":"..."} only.', null);
+      const clean = String(raw || '').replace(/```json|```/g, '').trim();
+      let j = null;
+      try { j = JSON.parse(clean); } catch (e) {
+        const m = clean.match(/\{[\s\S]*\}/);
+        if (m) { try { j = JSON.parse(m[0]); } catch (e2) { j = null; } }
+      }
+      const topic = j && String(j.topic || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+      if (topic) return topic;
+    } catch (e) {}
+    return fallback;
+  }
+  async function openVocab(skipId) {
+    const api = await vocabApi();
+    if (!api) {
+      await play([{ speaker: 'aria', text: 'I heard you. Vocabulary is not loaded, so tell me what you want to practice.' }]);
+      return;
+    }
+    const picked = api.wordFor(window.BrimGym ? BrimGym.loadProfile().vocab : null, Date.now(), skipId ? { skipId: skipId } : null);
+    if (!picked.word) {
+      await play([{ speaker: 'aria', text: 'I heard you. I do not have a word list yet. Tell me what you want to practice.' }]);
+      return;
+    }
+    const shown = await maybePersonalize(picked.word);
+    saveVocab(picked.track);
+    track = { kind: 'vocab', wordId: shown.id, phase: 'sentence' };
+    const pals = api.companions(picked.track, shown).map(w => w.word + ': ' + w.meaning + ' Example: ' + w.example).join(' ');
+    await play([
+      { speaker: 'aria', text: 'Word of the day: ' + shown.word + '. It means ' + shown.meaning + ' Example: ' + shown.example },
+      { speaker: 'aria', text: (pals ? 'Also at your level. ' + pals + ' ' : '') + 'Use ' + shown.word + ' in one spoken sentence.' }
+    ]);
+  }
+  async function openSpeech(value) {
+    const api = await vocabApi();
+    const explicit = api ? api.speechTopic(value, Date.now()) : 'a habit you want to keep';
+    const named = /\bpublic speaking\b(?:\s+(?:about|on)\s+|\s+)\S/i.test(value);
+    const topic = named ? explicit : await maybeTopic(explicit);
+    if (api && window.BrimGym) {
+      const state = api.sanitize(BrimGym.loadProfile().vocab);
+      state.speechTopic = topic;
+      saveVocab(state);
+    }
+    track = { kind: 'speech', topic: topic, phase: 'talk' };
+    await play([{ speaker: 'aria', text: api ? api.speechInvite(topic) : ('Public speaking. Give me about sixty seconds on ' + topic + '. I will score fillers, pace, and pauses, then give one tip.') }]);
+  }
+  async function routeTrack(value) {
+    releaseWork();
+    hostSession = null;
+    hostLock = false;
+    if (/^(vocabulary|word of the day)\b/i.test(value)) { track = null; await openVocab(); return true; }
+    if (/^public speaking\b/i.test(value)) { track = null; await openSpeech(value); return true; }
+    if (!track) { await play([{ speaker: 'aria', text: 'I heard you. Tell me what you want to practice.' }]); return true; }
+    const api = await vocabApi();
+    if (!api) { track = null; await play([{ speaker: 'aria', text: 'I heard you. Tell me what you want to practice.' }]); return; }
+    if (track.kind === 'vocab') {
+      if (/\bnext word\b/i.test(value)) { await openVocab(track.wordId); return; }
+      const state = api.sanitize(BrimGym.loadProfile().vocab);
+      const word = api.byId(track.wordId) || api.byId(state.todayId);
+      const graded = api.gradeSentence(state, value, word, Date.now());
+      saveVocab(graded.track);
+      await play([{ speaker: 'aria', text: graded.line }]);
+      return true;
+    }
+    if (track.phase === 'done') {
+      if (/^(retry|again)\b/i.test(value)) {
+        track.phase = 'talk';
+        await play([{ speaker: 'aria', text: api.speechRetry(track.topic) }]);
+        return true;
+      }
+      track = null;
+      return false;
+    }
+    const heard = pendingHeard;
+    pendingHeard = null;
+    const utter = heard && heard.start != null ? [{ text: value, start: heard.start, end: heard.end }] : [];
+    const card = window.BrimDelivery ? BrimDelivery.deliveryCard(utter, value) : { fillers: 0, wpm: null, pauseCount: 0, pauseMs: 0, tip: 'Say the point in one breath, then stop.' };
+    const short = (heard && heard.end - heard.start < 20000) || value.split(/\s+/).filter(Boolean).length < 20;
+    if (short) card.tip = 'That was short of a minute. On the retry, keep one point going until the minute is up.';
+    eng.lastGoal = null;
+    eng.lastDelivery = card;
+    track.phase = 'done';
+    const state = api.sanitize(BrimGym.loadProfile().vocab);
+    state.speechTopic = track.topic;
+    saveVocab(state);
+    await play([{ speaker: 'aria', text: 'That was the sixty-second rep on ' + track.topic + '. ' + (window.BrimDelivery ? BrimDelivery.formatCard(card) : card.tip) + ' Say retry for the same topic.' }]);
+    return true;
   }
   let speechGen = 0;
   function interrupt() {
@@ -903,7 +1107,7 @@
     vadTimer = requestAnimationFrame(pumpVad);
   }
   async function openVad() {
-    if (vadStream || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.BrimVad) return false;
+    if (!useEnergyVad() || vadStream || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.BrimVad) return false;
     try {
       vadStream = await navigator.mediaDevices.getUserMedia(BrimVad.MIC_CONSTRAINTS);
       const AC = window.AudioContext || window.webkitAudioContext;
@@ -944,11 +1148,17 @@
       }
       const said = finalText.trim();
       if (!said) return;
-      if (Vad && Vad.isEcho(said, lastCoachLine)) return;
+      const echoWindow = busy || (spokeUntil && Date.now() - spokeUntil < 1200);
+      if (echoWindow && Vad && Vad.isEcho(said, lastCoachLine)) {
+        setStatus('error', 'That matched Aria. Say your own line.');
+        return;
+      }
       gotResult = true;
       misses = 0;
+      audioFails = 0;
       pendingHeard = { start: recStartedAt || (Date.now() - 800), end: Date.now() };
       markLatency('stt-end', 'recognition final');
+      setStatus('heard', said);
       send(said);
     };
     rec.onend = () => {
@@ -957,13 +1167,29 @@
       const intentional = recIntentional;
       recIntentional = false;
       if (document.body.dataset.voice === 'listening' && !busy) setAvatarState('idle', { speaker: 'coach' });
+      if (lastRecError === 'audio-capture') {
+        releaseVad();
+        vadBlocked = true;
+        audioFails += 1;
+        lastRecError = '';
+        if (audioFails === 1) {
+          setStatus('error', 'Microphone was busy. Trying once more.');
+          setTimeout(listen, 400);
+          return;
+        }
+        setStatus('error', 'Microphone was busy. Tap to talk.');
+        return;
+      }
       const keep = handsFreeOn() && !hostLock && misses < 99 && document.visibilityState === 'visible';
-      if (!keep || intentional || !window.BrimVad) return;
+      if (!keep || intentional || !window.BrimVad) {
+        if (!gotResult && !intentional) setStatus('ready', 'Tap to talk');
+        return;
+      }
       const decision = BrimVad.recognitionRestart(lastRecError || (gotResult ? 'end' : 'no-speech'), { intentional: false, restarts: recentRestartCount() });
       lastRecError = '';
       if (decision.giveUp) {
-        if (decision.reason === 'restart-cap') $('note').textContent = 'The microphone kept restarting. Tap to talk when you are ready.';
-        if (decision.reason === 'blocked') $('note').textContent = 'Microphone blocked. Tap the lock icon in the address bar and allow the microphone.';
+        if (decision.reason === 'restart-cap') setStatus('error', 'Microphone kept restarting. Tap to talk.');
+        if (decision.reason === 'blocked') setStatus('error', 'Microphone blocked. Tap the lock icon and allow it.');
         return;
       }
       if (decision.restart) {
@@ -975,11 +1201,12 @@
       lastRecError = (e && e.error) || '';
       if (lastRecError === 'not-allowed' || lastRecError === 'service-not-allowed') {
         misses = 99;
-        $('note').textContent = 'Microphone blocked. Tap the lock icon in the address bar and allow the microphone.';
+        setStatus('error', 'Microphone blocked. Tap the lock icon and allow it.');
       }
-      if (lastRecError === 'audio-capture' && vadStream) {
+      if (lastRecError === 'audio-capture') {
         releaseVad();
-        $('note').textContent = 'Voice detection released the microphone so speech recognition can keep it. Press to talk still works, and a clear phrase still cuts the coach off.';
+        vadBlocked = true;
+        setStatus('error', 'Microphone was busy. Tap to talk.');
       }
     };
   } else $('note').textContent = !window.isSecureContext
@@ -995,9 +1222,11 @@
       listening = true;
       recStartedAt = Date.now();
       $('mic').classList.add('on');
+      setStatus('listening');
       setAvatarState('listening', { speaker: 'coach' });
     } catch (e) {
-      if (e && /InvalidStateError/i.test(String(e.name || e.message || ''))) listening = true;
+      if (e && /InvalidStateError/i.test(String(e.name || e.message || ''))) { listening = true; setStatus('listening'); return; }
+      setStatus('error', 'The microphone did not start.');
     }
   }
   function stopListening() {
@@ -1009,12 +1238,15 @@
   }
   $('mic').onclick = () => {
     unlockAudio();
-    openVad();
+    misses = 0;
+    recRestarts = [];
+    audioFails = 0;
     if (!openerHeard) {
       openerHeard = true;
       greeted = true;
       if ($('hearAria')) $('hearAria').hidden = true;
       $('micLabel').textContent = 'Tap to Talk';
+      armListen = true;
       play([{ speaker: 'aria', text: opener || scriptedOpener() }]);
       return;
     }
@@ -1023,20 +1255,21 @@
       const line = !eng.p.name
         ? "Welcome to Brimmesa. I'm Aria. What should I call you?"
         : 'Welcome back, ' + eng.p.name + '. Pick a glowing stop, or tell me where you want to practice.';
+      armListen = true;
       play([{ speaker: 'aria', text: line }]);
       return;
     }
-    misses = 0;
-    recRestarts = [];
     if (busy) {
       interrupt();
       listen();
       return;
     }
-    if (listening) { misses = 99; stopListening(); setAvatarState('idle', { speaker: 'coach' }); return; }
+    if (listening) { misses = 99; stopListening(); setStatus('ready', 'Mic off'); setAvatarState('idle', { speaker: 'coach' }); return; }
     interrupt();
     listen();
   };
+  if ($('vocabGo')) $('vocabGo').onclick = () => { unlockAudio(); send('vocabulary'); };
+  if ($('speechGo')) $('speechGo').onclick = () => { unlockAudio(); send('public speaking'); };
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') {
       stopListening();

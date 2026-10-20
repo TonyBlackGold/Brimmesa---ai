@@ -1,5 +1,10 @@
 // Local coaching gym. No network. Profile and per-coach state stay in localStorage.
 (function (root) {
+  let Vocab = null;
+  try {
+    if (typeof module !== 'undefined' && module.exports) Vocab = require('./vocab.js');
+  } catch (e) { Vocab = null; }
+  if (!Vocab && root && root.BrimVocab) Vocab = root.BrimVocab;
   const PROFILE_KEY = 'brimmesa.learner.profile.v1';
   const COACH_KEY = 'brimmesa.coachstate.v1';
   const MODES = ['conversation', 'coaching', 'challenge', 'freetalk'];
@@ -14,7 +19,7 @@
     return {
       lessons: [], skills: [], strengths: [], weaknesses: [],
       xp: 0, streak: 0, objectives: [], preferredStyle: 'direct',
-      topic: '', thread: '', summary: '', recent: []
+      topic: '', thread: '', summary: '', recent: [], vocab: null
     };
   }
   function blankCoach() {
@@ -34,6 +39,7 @@
     p.topic = String(raw.topic || '').slice(0, 80);
     p.thread = String(raw.thread || '').slice(0, 120);
     p.summary = String(raw.summary || '').slice(0, 420);
+    p.vocab = Vocab ? Vocab.sanitize(raw.vocab) : (raw.vocab && typeof raw.vocab === 'object' ? raw.vocab : null);
     p.recent = Array.isArray(raw.recent) ? raw.recent.slice(-8).map(t => ({
       speaker: String((t && t.speaker) || 'user').slice(0, 24),
       text: String((t && t.text) || '').slice(0, 160)

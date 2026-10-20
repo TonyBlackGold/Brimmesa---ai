@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "topics": [
+    "a habit you want to keep",
+    "a problem you can explain in one minute",
+    "advice you would give a friend"
+  ],
+  "words": [
+    { "id": "brief", "level": "starter", "word": "brief", "meaning": "Short, and still complete.", "example": "I will be brief and give the result first." },
+    { "id": "clarify", "level": "starter", "word": "clarify", "meaning": "Make the point easier to understand.", "example": "Let me clarify the one decision we need." },
+    { "id": "pause", "level": "starter", "word": "pause", "meaning": "A short stop so the listener can catch the point.", "example": "I pause after the result, then I take questions." },
+    { "id": "sincere", "level": "starter", "word": "sincere", "meaning": "Said as if you mean it.", "example": "A sincere thanks is specific, not automatic." },
+    { "id": "concise", "level": "steady", "word": "concise", "meaning": "Using only the words the point needs.", "example": "A concise update is one result and one reason." },
+    { "id": "emphasis", "level": "steady", "word": "emphasis", "meaning": "The word or idea you want them to remember.", "example": "Put the emphasis on the deadline, not the history." },
+    { "id": "audience", "level": "steady", "word": "audience", "meaning": "The people who have to act on what you say.", "example": "Tell the audience what you want them to do next." },
+    { "id": "credible", "level": "steady", "word": "credible", "meaning": "Believable because of a fact, not a claim.", "example": "The number makes the plan credible." },
+    { "id": "cadence", "level": "sharp", "word": "cadence", "meaning": "The rise and fall of the pace.", "example": "Slow the cadence on the sentence you want remembered." },
+    { "id": "articulate", "level": "sharp", "word": "articulate", "meaning": "Say it so each word is easy to hear.", "example": "Articulate the ask, then stop talking." },
+    { "id": "nuance", "level": "sharp", "word": "nuance", "meaning": "A small difference that changes the meaning.", "example": "The nuance is that we delayed the launch, we did not cancel it." },
+    { "id": "composure", "level": "sharp", "word": "composure", "meaning": "A steady voice when the room is not steady.", "example": "Composure is a slower first sentence, not a louder one." }
+  ]
+}

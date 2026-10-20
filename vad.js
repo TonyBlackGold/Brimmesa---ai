@@ -37,6 +37,14 @@
     return s;
   }
 
+  // A second getUserMedia stream steals the mic from SpeechRecognition on Android.
+  function allowEnergyStream(ua, handsFree) {
+    if (!handsFree) return false;
+    const u = String(ua || '');
+    if (/Android|iPhone|iPad|Mobile/i.test(u)) return false;
+    return true;
+  }
+
   function isEcho(heard, spoken) {
     const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
     const a = norm(heard);
@@ -57,7 +65,7 @@
     return { restart: true, giveUp: false, delay: delay, reason: err || 'end' };
   }
 
-  const api = { MIC_CONSTRAINTS, rmsFromTimeDomain, vadStep, isEcho, recognitionRestart };
+  const api = { MIC_CONSTRAINTS, rmsFromTimeDomain, vadStep, isEcho, recognitionRestart, allowEnergyStream };
   if (typeof module !== 'undefined') module.exports = api;
   else root.BrimVad = api;
 })(typeof window !== 'undefined' ? window : globalThis);

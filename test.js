@@ -829,5 +829,45 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
   const sumC = Harness.summarize(simC.marks);
   console.log('  Test C marks', sumC.count, 'avg gap ms', sumC.avgGapMs);
 
+  console.log('10) phone energy stream, vocabulary, public speaking');
+  assert.equal(Vad.allowEnergyStream('Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36', true), false);
+  assert.equal(Vad.allowEnergyStream('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148', true), false);
+  assert.equal(Vad.allowEnergyStream('Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15', true), false);
+  assert.equal(Vad.allowEnergyStream('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36', true), true);
+  assert.equal(Vad.allowEnergyStream('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36', false), false);
+  const Vocab = require('./vocab.js');
+  Vocab.load(JSON.parse(fs.readFileSync('data/vocabulary.json', 'utf8')));
+  const vocabDay = Date.parse('2026-10-20T15:00:00Z');
+  const vocabState = Vocab.wordFor(null, vocabDay);
+  const vocabAgain = Vocab.wordFor(vocabState.track, vocabDay);
+  assert.equal(vocabState.word.word, 'brief');
+  assert.equal(vocabAgain.word.id, vocabState.word.id);
+  assert.equal(vocabAgain.track.todayId, vocabState.word.id);
+  const vocabPals = Vocab.companions(vocabState.track, vocabState.word);
+  assert.equal(vocabPals.length, 2);
+  assert(vocabPals.every(w => w.word && w.meaning && w.example && w.id !== vocabState.word.id));
+  const vocabMiss = Vocab.gradeSentence(vocabState.track, 'I walked the dog', vocabState.word, vocabDay);
+  assert(/did not hear/i.test(vocabMiss.line));
+  assert.equal(vocabMiss.track.box[vocabState.word.id].n, 0);
+  const vocabShort = Vocab.gradeSentence(vocabState.track, 'brief note', vocabState.word, vocabDay);
+  assert(/long enough/i.test(vocabShort.line));
+  assert.equal(vocabShort.track.box[vocabState.word.id].n, 0);
+  const vocabHit = Vocab.gradeSentence(vocabState.track, 'I will be brief when I speak today', vocabState.word, vocabDay);
+  assert(/You used brief/.test(vocabHit.line));
+  assert(vocabHit.track.box[vocabState.word.id].n >= 1);
+  assert(vocabHit.track.box[vocabState.word.id].due > vocabDay);
+  assert.equal(Vocab.speechTopic('public speaking about client meetings', vocabDay), 'client meetings');
+  assert.equal(Vocab.speechTopic('public speaking', vocabDay), 'advice you would give a friend');
+  const talkInvite = Vocab.speechInvite('client meetings');
+  assert(/sixty seconds/i.test(talkInvite));
+  assert(/fillers, pace, and pauses/i.test(talkInvite));
+  const talkCard = Delivery.deliveryCard([
+    { text: 'Um uh I will explain the plan', start: 0, end: 4000 },
+    { text: 'and the next step for the team', start: 4800, end: 8000 }
+  ], 'Um uh I will explain the plan and the next step for the team');
+  assert(talkCard.fillers >= 2 && talkCard.wpm != null && talkCard.pauseCount >= 1);
+  assert(/Scorecard/.test(Delivery.formatCard(talkCard)));
+  assert(!/confidence|emotion/i.test(Delivery.formatCard(talkCard)));
+
   console.log('\nALL TESTS PASSED');
 })().catch(err => { console.error('FAIL', err); process.exit(1); });

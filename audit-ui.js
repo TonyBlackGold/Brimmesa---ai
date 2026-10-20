@@ -328,6 +328,133 @@ function overlaps(a, b) {
   assert.equal(afterDelete.marcus, 80);
   assert(!/Speak up at work/.test(afterDelete.review));
 
+  const page3 = await browser.newPage();
+  await page3.setViewport({ width: 360, height: 800, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  await page3.setUserAgent('Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36');
+  await page3.evaluateOnNewDocument(() => {
+    const finish = u => { try { if (u && u.onend) u.onend(); } catch (e) {} };
+    const synth = {
+      speaking: false, pending: false, paused: false,
+      getVoices: () => [], cancel() {}, pause() {}, resume() {}, speak: finish,
+      addEventListener() {}, removeEventListener() {}
+    };
+    try { sessionStorage.setItem('brimmesa.entrance.v1', '1'); } catch (e) {}
+    try { Object.defineProperty(window, 'speechSynthesis', { configurable: true, get: () => synth }); } catch (e) {}
+    window.__srStarts = 0;
+    window.__srQueue = [];
+    window.__gum = 0;
+    function FakeRec() {}
+    FakeRec.prototype.start = function () {
+      window.__srStarts += 1;
+      const job = window.__srQueue.shift();
+      if (!job) return;
+      const self = this;
+      this._timer = setTimeout(() => {
+        this._timer = 0;
+        if (self.onresult) {
+          self.onresult({
+            resultIndex: 0,
+            results: [{ 0: { transcript: job.text }, isFinal: true, length: 1 }]
+          });
+        }
+        if (self.onend) self.onend();
+      }, job.delay || 30);
+    };
+    FakeRec.prototype.abort = function () {
+      if (this._timer) clearTimeout(this._timer);
+      this._timer = 0;
+      if (this.onend) this.onend();
+    };
+    FakeRec.prototype.stop = function () { this.abort(); };
+    window.SpeechRecognition = FakeRec;
+    window.webkitSpeechRecognition = FakeRec;
+    const blockMic = () => {
+      window.__gum += 1;
+      return Promise.reject(new Error('energy stream blocked in this check'));
+    };
+    try {
+      if (!navigator.mediaDevices) Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {} });
+      navigator.mediaDevices.getUserMedia = blockMic;
+    } catch (e) {}
+  });
+  page3.on('pageerror', err => { console.error('PAGE3', err.message); });
+  await page3.goto(URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page3.evaluate(async () => {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r => r.unregister()));
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+    localStorage.clear();
+    localStorage.setItem('brimmesa.profile.v1', JSON.stringify({
+      name: 'Tony', xp: 0, streak: 0, lastDay: null, mastery: {}, history: [], lastActivity: null, lastFeedback: null, driving: false
+    }));
+    sessionStorage.setItem('brimmesa.entrance.v1', '1');
+  });
+  await page3.reload({ waitUntil: 'networkidle0', timeout: 30000 });
+  await page3.waitForSelector('body[data-ready="1"]', { timeout: 20000 });
+  const phoneBoot = await page3.evaluate(() => ({
+    handsFree: document.getElementById('auto').checked,
+    energy: BrimVad.allowEnergyStream(navigator.userAgent, true),
+    status: document.getElementById('voiceStatus').textContent,
+    vocab: !!document.getElementById('vocabGo'),
+    speech: !!document.getElementById('speechGo')
+  }));
+  assert.equal(phoneBoot.handsFree, false, 'press-to-talk is the phone default');
+  assert.equal(phoneBoot.energy, false);
+  assert(/Ready/.test(phoneBoot.status));
+  assert(phoneBoot.vocab && phoneBoot.speech);
+  await page3.evaluate(() => { window.__srQueue.push({ text: 'vocabulary', delay: 40 }); });
+  await page3.click('#mic');
+  await page3.waitForFunction(() => /Word of the day/i.test(document.getElementById('log').textContent) && /brief/i.test(document.getElementById('log').textContent), { timeout: 12000 });
+  const afterVoice = await page3.evaluate(() => ({
+    gum: window.__gum,
+    starts: window.__srStarts,
+    log: document.getElementById('log').textContent,
+    status: document.getElementById('voiceStatus').textContent
+  }));
+  assert.equal(afterVoice.gum, 0, 'Android must not open a second microphone');
+  assert(afterVoice.starts >= 1 && afterVoice.starts <= 2, 'recognition starts ' + afterVoice.starts);
+  assert(/Tony, I'm Aria|I'm Aria/.test(afterVoice.log));
+  assert(/Word of the day/.test(afterVoice.log));
+  assert(/Listening|Heard|Speaking|Ready|Error/.test(afterVoice.status));
+  await page3.evaluate(() => document.getElementById('typeBtn').click());
+  await page3.waitForSelector('#typeRow:not([hidden])');
+  await page3.type('#txt', 'I will be brief when I speak today');
+  await page3.$eval('#typeRow', form => form.requestSubmit());
+  await page3.waitForFunction(() => /You used brief/i.test(document.getElementById('log').textContent), { timeout: 8000 });
+  const storedVocab = await page3.evaluate(() => {
+    const raw = localStorage.getItem('brimmesa.learner.profile.v1');
+    const profile = raw ? JSON.parse(raw) : null;
+    const box = profile && profile.vocab && profile.vocab.box && profile.vocab.box.brief;
+    return { n: box && box.n, due: box && box.due };
+  });
+  assert(storedVocab.n >= 1 && storedVocab.due > Date.now() - 1000);
+  await page3.click('#speechGo');
+  await page3.waitForFunction(() => /sixty seconds/i.test(document.getElementById('log').textContent), { timeout: 8000 });
+  const talk = 'Um I will explain one change and why it matters to the team today uh then I will stop and take one question from the room';
+  await page3.evaluate(text => { window.__srQueue.push({ text: text, delay: 1100 }); }, talk);
+  await page3.click('#mic');
+  await page3.waitForFunction(() => /Scorecard/.test(document.getElementById('log').textContent) && /Filler words/.test(document.getElementById('log').textContent), { timeout: 12000 });
+  const scored = await page3.evaluate(() => ({
+    gum: window.__gum,
+    starts: window.__srStarts,
+    log: document.getElementById('log').textContent,
+    card: document.getElementById('scorecardBody').textContent,
+    hidden: document.getElementById('scorecard').hidden,
+    status: document.getElementById('voiceStatus').textContent
+  }));
+  assert.equal(scored.gum, 0);
+  assert(scored.starts <= 4, 'recognition did not spin, starts ' + scored.starts);
+  assert(/Filler words: [1-9]/.test(scored.log));
+  assert(/Tip:/.test(scored.log));
+  assert(!/confidence|emotion/i.test(scored.log));
+  assert.equal(scored.hidden, false);
+  assert(/Filler words/.test(scored.card));
+  assert(scored.status && scored.status.length > 3);
+  await page3.type('#txt', 'Tell me something useful about practicing out loud');
+  await page3.$eval('#typeRow', form => form.requestSubmit());
+  await page3.waitForFunction(() => /didn't catch which one/i.test(document.getElementById('log').textContent), { timeout: 8000 });
+
   console.log('AUDIT UI PASSED');
   await browser.close();
 })().catch(err => { console.error('AUDIT UI FAIL', err); process.exit(1); });

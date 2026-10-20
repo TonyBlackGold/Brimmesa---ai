@@ -204,6 +204,7 @@ body[data-voice="listening"] .waves i, body[data-voice="speaking"] .waves i { an
 #micLabel { margin: 4px 0 0; font-family: var(--serif); font-size: 16px; line-height: 1.15; white-space: nowrap; }
 .hint, #note, #driveNote { margin: 2px 0 0; color: var(--muted); font-size: 12px; text-align: center; line-height: 1.2; }
 .mic-wrap .hint { max-width: 168px; }
+#voiceStatus { max-width: min(64vw, 240px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #typeRow { display: flex; gap: 8px; margin: 10px auto 0; width: min(560px, 100%); }
 #typeRow[hidden] { display: none !important; }
 #txt { flex: 1; min-height: 48px; border-radius: 12px; border: 1px solid var(--line); background: #101218; padding: 10px 12px; font-size: 16px; }
@@ -476,6 +477,9 @@ button.ghost {
   border: 1px solid var(--line); background: #0e1014; color: var(--ink); padding: 8px;
 }
 .comic { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.track-row { display: flex; gap: 8px; margin-top: 8px; }
+.track-row button { flex: 1; min-height: 40px; }
+.update-bar { position: fixed; z-index: 50; left: 12px; right: 12px; top: calc(8px + env(safe-area-inset-top)); border: 0; border-radius: 999px; padding: 10px 14px; background: #e0b65a; color: #1a1408; font-weight: 700; }
 .scorecard { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: #14120e; }
 .scorecard p { margin: 4px 0; font-size: 13px; line-height: 1.35; color: var(--text, #f3efe4); }
 .panel {
@@ -587,6 +591,7 @@ body:not([data-ready="1"]) #missionGo { pointer-events: none; }
 </style>
 </head>
 <body data-view="map" data-voice="idle">
+<button id="updateBar" class="update-bar" type="button" hidden>New version ready. Tap to reload.</button>
 <div class="app">
   <header class="top">
     <div class="brand">
@@ -671,6 +676,10 @@ body:not([data-ready="1"]) #missionGo { pointer-events: none; }
             <p class="kicker">Aria</p>
             <p id="ariaLine">Pick a glowing stop. We will practice it out loud.</p>
             <label class="goal">Your goal<input id="goalInput" maxlength="180" placeholder="What are you working toward?"></label>
+            <div class="track-row">
+              <button class="ghost" id="vocabGo" type="button">Vocabulary</button>
+              <button class="ghost" id="speechGo" type="button">Public speaking</button>
+            </div>
           </div>
         </article>
         <div id="loopBar" class="loop-bar" hidden>
@@ -858,7 +867,7 @@ body:not([data-ready="1"]) #missionGo { pointer-events: none; }
       </div>
       <p id="micLabel">Tap to Talk</p>
       <p class="hint" id="hearAria" hidden>Tap to hear Aria</p>
-      <p class="hint">Talk to cut them off.</p>
+      <p class="hint" id="voiceStatus" data-state="ready">Ready: Tap to talk</p>
     </div>
     <button class="flank" id="viewBtn" type="button"><span class="orb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 6h14v9H8l-3 3V6z"/></svg></span>View conversation</button>
   </div>
@@ -893,8 +902,8 @@ body:not([data-ready="1"]) #missionGo { pointer-events: none; }
 <dialog id="settingsDlg">
   <h3>Settings</h3>
   <label class="row"><input type="checkbox" id="drive"> Driving mode (short, audio only)</label>
-  <label class="row"><input type="checkbox" id="auto" checked> Hands-free (keep listening)</label>
-  <p class="fine">Hands-free keeps the microphone on while a coach speaks. Your voice cuts the playback. Turn this off to press and talk.</p>
+  <label class="row"><input type="checkbox" id="auto"> Hands-free (keep listening)</label>
+  <p class="fine">On a phone, press-to-talk is the default. Turn hands-free on to keep listening after Aria speaks. A phone does not open a second microphone for energy detection. An interim transcript still cuts her off.</p>
   <label class="row"><input type="checkbox" id="avatar3d" checked> Animated portrait</label>
   <label class="row"><input type="checkbox" id="tilt"> Phone tilt (a little parallax)</label>
   <p class="fine">The photo stays hers. Blinks, a small mouth, and a little sway run on this device. Off keeps the still portrait. Nothing is uploaded.</p>
@@ -962,13 +971,37 @@ body:not([data-ready="1"]) #missionGo { pointer-events: none; }
 <script src="speech.js"></script>
 <script src="presenter.js"></script>
 <script src="walk.js"></script>
+<script src="vocab.js"></script>
 <script src="gym.js"></script>
 <script src="app.js"></script>
 <script>
 if ('serviceWorker' in navigator) {
+  var bar = document.getElementById('updateBar');
+  if (bar) bar.addEventListener('click', function () { location.reload(); });
   var hadController = !!navigator.serviceWorker.controller;
-  navigator.serviceWorker.addEventListener('controllerchange', function () { if (hadController) location.reload(); });
-  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(function () {});
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (bar) bar.hidden = false;
+    if (hadController) location.reload();
+  });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
+    function offer(worker) {
+      if (!worker || !bar) return;
+      bar.hidden = false;
+      bar.onclick = function () {
+        if (worker.state === 'installed' || worker.state === 'waiting') worker.postMessage({ type: 'skip-wait' });
+        location.reload();
+      };
+    }
+    if (reg.waiting) offer(reg.waiting);
+    reg.addEventListener('updatefound', function () {
+      var nw = reg.installing;
+      if (!nw) return;
+      nw.addEventListener('statechange', function () {
+        if (nw.state === 'installed' && navigator.serviceWorker.controller) offer(nw);
+      });
+    });
+    reg.update().catch(function () {});
+  }).catch(function () {});
 }
 </script>
 </body>
