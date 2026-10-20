@@ -1,5 +1,5 @@
 // Network-first cache so a refresh picks up a new deploy, with an offline fallback.
-const C = 'brimmesa-v30';
+const C = 'brimmesa-v31';
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('message', e => {
   if (e.data && e.data.type === 'skip-wait') self.skipWaiting();

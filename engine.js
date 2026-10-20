@@ -437,10 +437,32 @@
     required: ['score', 'strengths', 'tips']
   };
 
-  function geminiError(status) {
+  const LLM_TIMEOUT_MS = 8000;
+  function geminiError(status, reason) {
     const err = new Error('gemini');
     err.status = status || 0;
+    err.reason = reason || '';
     return err;
+  }
+  function fetchWithin(fetchFn, url, options, ms) {
+    const budget = Math.max(1, Number(ms) || LLM_TIMEOUT_MS);
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    let timer = 0;
+    const timed = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        if (ctrl) { try { ctrl.abort(); } catch (e) {} }
+        const err = new Error('timeout');
+        err.name = 'AbortError';
+        err.reason = 'timeout';
+        reject(err);
+      }, budget);
+    });
+    const opts = Object.assign({}, options);
+    if (ctrl) opts.signal = ctrl.signal;
+    return Promise.race([
+      Promise.resolve().then(() => fetchFn(url, opts)),
+      timed
+    ]).finally(() => clearTimeout(timer));
   }
 
   // Browser Gemini provider. enabled stays false on this object. The shell builds
@@ -576,24 +598,26 @@
       const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent';
       const fetchFn = this.fetchImpl || (typeof fetch === 'function' ? fetch : null);
       if (!fetchFn) throw geminiError(0);
+      const budget = Number(this.timeoutMs) || LLM_TIMEOUT_MS;
       const send = (withSchema) => {
         const generationConfig = { temperature: 0.7, maxOutputTokens: 512 };
         if (withSchema && schema) {
           generationConfig.responseMimeType = 'application/json';
           generationConfig.responseSchema = schema;
         }
-        return fetchFn(url, {
+        return fetchWithin(fetchFn, url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
           body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig })
-        });
+        }, budget);
       };
+      const timedOut = e => !!(e && (e.reason === 'timeout' || e.name === 'AbortError'));
       let res;
       try { res = await send(true); }
-      catch (e) { throw geminiError(0); }
+      catch (e) { throw geminiError(0, timedOut(e) ? 'timeout' : ''); }
       if (res && res.status === 400 && schema) {
         try { res = await send(false); }
-        catch (e) { throw geminiError(0); }
+        catch (e) { throw geminiError(0, timedOut(e) ? 'timeout' : ''); }
       }
       if (!res || !res.ok) throw geminiError(res && res.status);
       this.bumpUsage();
@@ -838,6 +862,6 @@
     heygen: { implemented: false }
   };
 
-  const api = { Engine, newProfile, level, awardXP, touchStreak, ScriptedProvider, LLMProvider, createLLMProvider, makeHttpProvider, futureHooks };
+  const api = { Engine, newProfile, level, awardXP, touchStreak, ScriptedProvider, LLMProvider, createLLMProvider, makeHttpProvider, futureHooks, LLM_TIMEOUT_MS, GEMINI_MODEL };
   if (typeof module !== 'undefined') module.exports = api; else root.BrimEngine = api;
 })(this);

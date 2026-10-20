@@ -49,6 +49,7 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
     const state = { usage: { day: '', count: 0 }, memory: [], calls: [] };
     const llm = createLLMProvider({
       enabled: opts.enabled !== false,
+      timeoutMs: opts.timeoutMs,
       getKey: () => (opts.key === undefined ? SECRET : opts.key),
       getModel: () => opts.model || 'gemini-3.5-flash-lite',
       getCast: () => cast,
@@ -236,6 +237,25 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
     assert.equal(r[0].text, 'Still with you.');
     assert(state.calls[0].url.includes('models/gemini-3.8-flash:generateContent'));
     assert.equal(state.usage.count, 1);
+    const hangStart = Date.now();
+    const hungBrain = brain({
+      timeoutMs: 80,
+      fetchImpl: (url, req) => new Promise((resolve, reject) => {
+        const fail = () => {
+          const err = new Error('aborted');
+          err.name = 'AbortError';
+          reject(err);
+        };
+        if (req && req.signal) req.signal.addEventListener('abort', fail);
+      })
+    });
+    const hungReply = await hungBrain.eng.handle('tell me something useful');
+    assert(/didn't catch which one/.test(hungReply[0].text));
+    assert(Date.now() - hangStart < 1000, 'llm hang took ' + (Date.now() - hangStart));
+    assert.equal(hungBrain.eng.provider.timeoutMs, 80);
+    assert.equal(createLLMProvider({}).timeoutMs, undefined);
+    assert.equal(require('./engine.js').LLM_TIMEOUT_MS, 8000);
+    assert.equal(require('./engine.js').GEMINI_MODEL, 'gemini-3.5-flash-lite');
     const off = createLLMProvider({ enabled: false, fetchImpl: async () => { throw new Error('disabled provider must not fetch'); } });
     const quiet = new Engine({ worlds, content, profile: newProfile(), provider: off, now: fixedNow });
     const miss = await quiet.handle('tell me something useful');
@@ -338,6 +358,44 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
   assert.equal((await limited.synthesize('Hello.', 'Orus', 'firm')).blocked, 'rate');
   const quiet = speech.createSpeaker({ getKey: () => '', fetchImpl: async () => { throw new Error('no key must not fetch'); } });
   assert.equal((await quiet.synthesize('Hello.', 'Leda', 'playful')).blocked, 'nokey');
+  const cloudHangStarted = Date.now();
+  const cloudHang = speech.createSpeaker({
+    getKey: () => SECRET,
+    now: fixedNow,
+    readUsage: () => ({ day: '', count: 0 }),
+    writeUsage() { throw new Error('timeout must not count'); },
+    timeoutMs: 40,
+    fetchImpl: (url, req) => new Promise((resolve, reject) => {
+      if (req && req.signal) req.signal.addEventListener('abort', () => {
+        const err = new Error('aborted');
+        err.name = 'AbortError';
+        reject(err);
+      });
+    })
+  });
+  const cloudSlow = await cloudHang.synthesize('Hello there.', 'Sulafat', 'warm');
+  assert.equal(cloudSlow.blocked, 'timeout');
+  assert(/exceeded/.test(cloudSlow.reason));
+  assert(Date.now() - cloudHangStarted < 1000);
+  assert.equal(speech.CLOUD_TTS_TIMEOUT_MS, 6000);
+  assert.equal(speech.TTS_MODEL, 'gemini-3.8-flash-lite-tts');
+  let browserCancelled = false;
+  const deadSynth = { speak() {}, cancel() { browserCancelled = true; }, resume() {} };
+  const deadStarted = Date.now();
+  const deadSpoken = await speech.speakBrowserDeadline(deadSynth, { text: 'Hi there friend' }, { startMs: 40, capMs: 5000 });
+  assert.equal(deadSpoken.reason, 'timeout');
+  assert.equal(deadSpoken.started, false);
+  assert(browserCancelled);
+  assert(Date.now() - deadStarted < 500);
+  const liveSynth = {
+    speak(u) { setTimeout(() => { if (u.onstart) u.onstart(); setTimeout(() => { if (u.onend) u.onend(); }, 5); }, 5); },
+    cancel() {},
+    resume() {}
+  };
+  const liveSpoken = await speech.speakBrowserDeadline(liveSynth, { text: 'Hi' }, { startMs: 200, capMs: 500 });
+  assert.equal(liveSpoken.started, true);
+  assert.equal(liveSpoken.reason, 'end');
+  assert.equal(speech.BROWSER_TTS_START_MS, 2000);
   assert.equal(cast.find(c => c.id === 'amara').voice.geminiVoice, 'Sulafat');
   assert.equal(cast.find(c => c.id === 'jasmine').voice.geminiVoice, 'Leda');
   assert.equal(cast.find(c => c.id === 'renee').voice.geminiVoice, 'Despina');
@@ -408,6 +466,21 @@ const say = async (e, t) => { const r = await e.handle(t); console.log('  YOU:',
     fetchImpl: async () => ({ ok: false, status: 429, json: async () => ({}) })
   });
   assert.equal((await busy.synthesize('Hello there.', 'voice')).blocked, 'rate');
+  const elevenHangStarted = Date.now();
+  const elevenHang = speech.createEleven({
+    getKey: () => 'xi-test',
+    timeoutMs: 40,
+    fetchImpl: (url, req) => new Promise((resolve, reject) => {
+      if (req && req.signal) req.signal.addEventListener('abort', () => {
+        const err = new Error('aborted');
+        err.name = 'AbortError';
+        reject(err);
+      });
+    })
+  });
+  const elevenSlow = await elevenHang.synthesize('Hello there.', 'voice');
+  assert.equal(elevenSlow.blocked, 'timeout');
+  assert(Date.now() - elevenHangStarted < 1000);
   const bare = speech.createEleven({ getKey: () => '', fetchImpl: async () => { throw new Error('no key must not fetch'); } });
   assert.equal((await bare.synthesize('Hello.', 'voice')).blocked, 'nokey');
   const full = speech.createEleven({

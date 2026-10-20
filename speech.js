@@ -2,6 +2,8 @@
 (function (root) {
   const TTS_MODEL = 'gemini-3.8-flash-lite-tts';
   const TTS_DAILY = 40;
+  const CLOUD_TTS_TIMEOUT_MS = 6000;
+  const BROWSER_TTS_START_MS = 2000;
   const SAMPLE_RATE = 24000;
   const BRAND = /\bbrimmesa\b/gi;
 
@@ -128,6 +130,79 @@
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
   }
 
+  function fetchWithin(fetchFn, url, options, ms) {
+    const budget = Math.max(1, Number(ms) || CLOUD_TTS_TIMEOUT_MS);
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    let timer = 0;
+    const timed = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        if (ctrl) { try { ctrl.abort(); } catch (e) {} }
+        const err = new Error('timeout');
+        err.name = 'AbortError';
+        err.reason = 'timeout';
+        reject(err);
+      }, budget);
+    });
+    const opts = Object.assign({}, options);
+    if (ctrl) opts.signal = ctrl.signal;
+    return Promise.race([
+      Promise.resolve().then(() => fetchFn(url, opts)),
+      timed
+    ]).finally(() => clearTimeout(timer));
+  }
+  function cacheWithin(read, ms) {
+    if (!read) return Promise.resolve(null);
+    let timer = 0;
+    return Promise.race([
+      Promise.resolve().then(() => read()).catch(() => null),
+      new Promise(resolve => { timer = setTimeout(() => resolve(null), ms || 400); })
+    ]).finally(() => clearTimeout(timer));
+  }
+  function speakBrowserDeadline(synth, utterance, opts) {
+    const options = opts || {};
+    const startMs = Number(options.startMs) || BROWSER_TTS_START_MS;
+    const capMs = options.capMs != null ? Number(options.capMs) : Math.min(12000, startMs + String((utterance && utterance.text) || '').length * 70);
+    const alive = () => !options.isCurrent || options.isCurrent();
+    return new Promise(resolve => {
+      let started = false;
+      let done = false;
+      let startTimer = 0;
+      let capTimer = 0;
+      let kick = 0;
+      const finish = reason => {
+        if (done) return;
+        done = true;
+        clearTimeout(startTimer);
+        clearTimeout(capTimer);
+        clearInterval(kick);
+        resolve({ started: started, reason: reason });
+      };
+      startTimer = setTimeout(() => {
+        if (started || done) return;
+        if (alive()) { try { synth && synth.cancel && synth.cancel(); } catch (e) {} }
+        finish(alive() ? 'timeout' : 'replaced');
+      }, startMs);
+      capTimer = setTimeout(() => {
+        if (done) return;
+        if (alive()) { try { synth && synth.cancel && synth.cancel(); } catch (e) {} }
+        finish(alive() ? 'cap' : 'replaced');
+      }, Math.max(startMs, capMs));
+      kick = setInterval(() => { try { if (alive() && synth && synth.resume) synth.resume(); } catch (e) {} }, 250);
+      if (utterance) {
+        utterance.onstart = () => {
+          started = true;
+          clearTimeout(startTimer);
+          if (options.onstart) options.onstart();
+        };
+        utterance.onend = () => finish(started ? 'end' : 'end');
+        utterance.onerror = () => finish('error');
+      }
+      try {
+        synth.speak(utterance);
+        if (synth.resume) synth.resume();
+      } catch (e) { finish('error'); }
+    });
+  }
   function createSpeaker(opts) {
     opts = opts || {};
     const limit = opts.dailyLimit || TTS_DAILY;
@@ -145,28 +220,28 @@
       model: TTS_MODEL,
       dailyLimit: limit,
       usageNow,
-      async synthesize(text, voice, style) {
+      async synthesize(text, voice, style, callOpts) {
         const spoken = spokenText(text, 'gemini');
         if (!spoken) return { blocked: 'empty' };
         const cacheKey = [TTS_MODEL, voice || 'Sulafat', style || '', spoken].join('\n');
-        try {
-          const hit = opts.cacheGet && await opts.cacheGet(cacheKey);
-          if (hit && hit.length) return { bytes: hit, mime: 'audio/wav', cached: true, spoken };
-        } catch (e) {}
+        const hit = await cacheWithin(() => opts.cacheGet && opts.cacheGet(cacheKey), 400);
+        if (hit && hit.length) return { bytes: hit, mime: 'audio/wav', cached: true, spoken };
         const key = opts.getKey ? opts.getKey() : '';
         if (!key) return { blocked: 'nokey', spoken };
         if (usageNow().count >= limit) return { blocked: 'limit', spoken };
         const fetchFn = opts.fetchImpl || (typeof fetch === 'function' ? fetch : null);
         if (!fetchFn) return { blocked: 'error', spoken };
         const url = 'https://generativelanguage.googleapis.com/v1beta/interactions';
+        const budget = (callOpts && callOpts.timeoutMs) || opts.timeoutMs || CLOUD_TTS_TIMEOUT_MS;
         let res;
         try {
-          res = await fetchFn(url, {
+          res = await fetchWithin(fetchFn, url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
             body: JSON.stringify(ttsBody(spoken, voice, style))
-          });
+          }, budget);
         } catch (e) {
+          if (e && (e.reason === 'timeout' || e.name === 'AbortError')) return { blocked: 'timeout', spoken, reason: 'gemini tts exceeded ' + budget + 'ms' };
           return { blocked: 'offline', spoken };
         }
         if (!res || !res.ok) return { blocked: res && res.status === 429 ? 'rate' : 'error', status: res && res.status, spoken };
@@ -288,8 +363,10 @@
       const headers = Object.assign({ 'xi-api-key': k }, (options && options.headers) || {});
       let res;
       try {
-        res = await fetchFn(base + path, Object.assign({}, options || {}, { headers }));
+        const budget = (options && options.timeoutMs) || opts.timeoutMs || CLOUD_TTS_TIMEOUT_MS;
+        res = await fetchWithin(fetchFn, base + path, Object.assign({}, options || {}, { headers }), budget);
       } catch (e) {
+        if (e && (e.reason === 'timeout' || e.name === 'AbortError')) return { blocked: 'timeout', reason: 'elevenlabs exceeded the voice deadline' };
         return { blocked: 'offline' };
       }
       return { res };
@@ -326,23 +403,22 @@
           status: json.status || ''
         };
       },
-      async synthesize(text, voiceId) {
+      async synthesize(text, voiceId, callOpts) {
         const spoken = spokenText(text, 'gemini');
         if (!spoken) return { blocked: 'empty' };
         const voice = voiceId || EL_VOICES.amara.voice_id;
         const cacheKey = ['eleven', EL_MODEL, voice, spoken].join('\n');
-        try {
-          const hit = opts.cacheGet && await opts.cacheGet(cacheKey);
-          if (hit && hit.bytes && hit.bytes.length) {
-            return { bytes: hit.bytes, mime: hit.mime || 'audio/mpeg', plan: hit.plan, cached: true, spoken, provider: 'eleven' };
-          }
-        } catch (e) {}
+        const hit = await cacheWithin(() => opts.cacheGet && opts.cacheGet(cacheKey), 400);
+        if (hit && hit.bytes && hit.bytes.length) {
+          return { bytes: hit.bytes, mime: hit.mime || 'audio/mpeg', plan: hit.plan, cached: true, spoken, provider: 'eleven' };
+        }
         if (!key()) return { blocked: 'nokey', spoken };
         let sub = null;
         try { sub = opts.readUsage && opts.readUsage(); } catch (e) { sub = null; }
         if (sub && sub.character_limit && sub.character_count >= sub.character_limit) return { blocked: 'limit', spoken };
         const got = await call('/v1/text-to-speech/' + encodeURIComponent(voice) + '/with-timestamps?output_format=mp3_22050_32', {
           method: 'POST',
+          timeoutMs: (callOpts && callOpts.timeoutMs) || opts.timeoutMs || CLOUD_TTS_TIMEOUT_MS,
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify({
             text: spoken,
@@ -374,7 +450,8 @@
   }
 
   const api = {
-    TTS_MODEL, TTS_DAILY, SAMPLE_RATE, pronounce, browserSpells, spokenText, sentences,
+    TTS_MODEL, TTS_DAILY, CLOUD_TTS_TIMEOUT_MS, BROWSER_TTS_START_MS, SAMPLE_RATE,
+    pronounce, browserSpells, spokenText, sentences, fetchWithin, speakBrowserDeadline,
     styleFor, ttsBody, extractAudio, b64ToBytes, parseWav, encodeWav, fitWords, dayStamp, createSpeaker,
     EL_MODEL, EL_VOICES, alignmentPlan, pickVoice, createEleven
   };

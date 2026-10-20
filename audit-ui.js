@@ -455,6 +455,75 @@ function overlaps(a, b) {
   await page3.$eval('#typeRow', form => form.requestSubmit());
   await page3.waitForFunction(() => /didn't catch which one/i.test(document.getElementById('log').textContent), { timeout: 8000 });
 
+  const page4 = await browser.newPage();
+  await page4.setViewport({ width: 360, height: 800, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  await page4.setUserAgent('Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36');
+  await page4.evaluateOnNewDocument(() => {
+    const synth = {
+      speaking: false, pending: false, paused: false,
+      getVoices: () => [], cancel() {}, pause() {}, resume() {},
+      speak() {},
+      addEventListener() {}, removeEventListener() {}
+    };
+    try { sessionStorage.setItem('brimmesa.entrance.v1', '1'); } catch (e) {}
+    try { Object.defineProperty(window, 'speechSynthesis', { configurable: true, get: () => synth }); } catch (e) {}
+    const origFetch = window.fetch.bind(window);
+    window.fetch = function (url, opts) {
+      const u = String(url && url.url || url || '');
+      if (/generativelanguage\.googleapis\.com|api\.elevenlabs\.io/i.test(u)) {
+        return new Promise((resolve, reject) => {
+          const signal = opts && opts.signal;
+          const fail = () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+          if (signal) {
+            if (signal.aborted) fail();
+            else signal.addEventListener('abort', fail);
+          }
+        });
+      }
+      return origFetch(url, opts);
+    };
+  });
+  await page4.goto(URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page4.evaluate(async () => {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r => r.unregister()));
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+    localStorage.clear();
+    localStorage.setItem('brimmesa.profile.v1', JSON.stringify({
+      name: 'Tony', xp: 0, streak: 0, lastDay: null, mastery: {}, history: [], lastActivity: null, lastFeedback: null, driving: false
+    }));
+    localStorage.setItem('brimmesa.gemini.key', 'not-a-real-key');
+    sessionStorage.setItem('brimmesa.entrance.v1', '1');
+  });
+  await page4.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page4.waitForSelector('body[data-ready="1"]', { timeout: 20000 });
+  await page4.evaluate(() => document.getElementById('typeBtn').click());
+  await page4.waitForSelector('#typeRow:not([hidden])');
+  const hangStarted = Date.now();
+  await page4.type('#txt', 'Tell me something useful about practicing out loud');
+  await page4.$eval('#typeRow', form => form.requestSubmit());
+  await page4.waitForFunction(() => /Thinking/.test(document.getElementById('voiceStatus').textContent), { timeout: 1000 });
+  await page4.waitForFunction(() => /didn't catch which one/i.test(document.getElementById('log').textContent), { timeout: 12000 });
+  const textAt = Date.now() - hangStarted;
+  assert(textAt < 10000, 'first text took ' + textAt);
+  await page4.waitForFunction(() => {
+    const marks = (window.BrimLatency && window.BrimLatency.marks) || [];
+    const chip = document.getElementById('voiceStatus').textContent || '';
+    const llm = marks.some(m => m.stage === 'llm-timeout');
+    const voice = marks.some(m => m.stage === 'tts-timeout' || m.stage === 'tts-browser-timeout') || /backup voice/i.test(chip);
+    return llm && voice;
+  }, { timeout: 20000 });
+  const hung = await page4.evaluate(() => {
+    const marks = (window.BrimLatency && window.BrimLatency.marks) || [];
+    return {
+      stages: marks.map(m => m.stage + (m.note ? ' ' + m.note : '')),
+      chip: document.getElementById('voiceStatus').textContent
+    };
+  });
+  assert(hung.stages.some(s => s.indexOf('llm-timeout') === 0), JSON.stringify(hung.stages));
+  assert(Date.now() - hangStarted < 22000, 'hang path took ' + (Date.now() - hangStarted));
+
   console.log('AUDIT UI PASSED');
   await browser.close();
 })().catch(err => { console.error('AUDIT UI FAIL', err); process.exit(1); });

@@ -388,7 +388,11 @@
       get: function () { try { return localStorage.getItem(KEY); } catch (e) { return null; } },
       set: function (v) { try { localStorage.setItem(KEY, v); } catch (e) {} }
     },
-    fetch: function (url) { return fetch(url); },
+    fetch: function (url) {
+      const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 6000);
+      return fetch(url, ctrl ? { signal: ctrl.signal } : undefined).finally(function () { clearTimeout(timer); });
+    },
     now: function () { return Date.now(); },
     locate: function () {
       return new Promise(function (resolve, reject) {

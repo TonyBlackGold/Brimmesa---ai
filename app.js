@@ -71,9 +71,18 @@
   });
   const rawGenerate = llm.generate.bind(llm);
   llm.generate = async function (prompt, schema) {
+    const t0 = Date.now();
     markLatency('llm-start', 'generateContent is not streamed');
-    try { return await rawGenerate(prompt, schema); }
-    finally { markLatency('llm-complete', 'generateContent returns the full body, so first byte is the completion'); }
+    try {
+      const out = await rawGenerate(prompt, schema);
+      markLatency('llm-complete', 'ok in ' + (Date.now() - t0) + 'ms');
+      return out;
+    } catch (e) {
+      const reason = (e && e.reason) || (e && e.name === 'AbortError' ? 'timeout' : 'error');
+      markLatency(reason === 'timeout' ? 'llm-timeout' : 'llm-complete', reason + ' after ' + (Date.now() - t0) + 'ms');
+      if (reason === 'timeout') setStatus('thinking', 'Reply service slow, using the practice script');
+      throw e;
+    }
   };
   if (llm.enabled) eng.provider = llm;
   const ttsCache = new Map();
@@ -431,17 +440,24 @@
     const ctx = audioContext();
     if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
   }
+  let browserToken = 0;
+  function voiceSlow(reason) {
+    markLatency('tts-timeout', reason || 'voice deadline');
+    setStatus('speaking', 'Voice service slow, using backup voice');
+    if ($('note')) $('note').textContent = 'Voice service slow, using backup voice.';
+  }
   function speakChunk(text, voice, pitch, rate, onutter) {
-    return new Promise(res => {
-      const u = new SpeechSynthesisUtterance(text);
-      if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = 'en-US';
-      u.pitch = pitch; u.rate = rate;
-      let done = false;
-      const fin = () => { if (!done) { done = true; clearTimeout(t); res(); } };
-      const t = setTimeout(fin, 1500 + text.length * 90 / rate);
-      u.onend = u.onerror = fin;
-      if (onutter) onutter(u);
-      synth.speak(u);
+    const token = ++browserToken;
+    const u = new SpeechSynthesisUtterance(text);
+    if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = 'en-US';
+    u.pitch = pitch; u.rate = rate;
+    if (onutter) onutter(u);
+    markLatency('tts-browser', 'speak called');
+    return BrimSpeech.speakBrowserDeadline(synth, u, {
+      isCurrent: () => token === browserToken,
+      onstart: () => markLatency('tts-start', 'browser speech started')
+    }).then(result => {
+      if (result && result.reason === 'timeout' && token === browserToken) voiceSlow('browser speech did not start in 2s');
     });
   }
   function isAmara(speaker) { return speaker === 'coach' || speaker === 'amara'; }
@@ -571,8 +587,12 @@
     return picked.voice_id;
   }
   async function prepareSpeech(text, line, cfg) {
-    if (localStorage.getItem(ELEVEN_KEY)) {
-      const first = await eleven.synthesize(text, elevenVoiceId(line.speaker));
+    const budget = BrimSpeech.CLOUD_TTS_TIMEOUT_MS;
+    const started = Date.now();
+    const left = () => budget - (Date.now() - started);
+    if (localStorage.getItem(ELEVEN_KEY) && left() > 250) {
+      markLatency('tts-eleven', 'request');
+      const first = await eleven.synthesize(text, elevenVoiceId(line.speaker), { timeoutMs: left() });
       paintVoices();
       if (first && first.bytes) {
         const ctx = playbackContext(line);
@@ -582,22 +602,28 @@
             if (buffer) return { buffer, spoken: first.spoken, plan: first.plan };
           } catch (e) {}
         }
-      } else if (first && (first.blocked === 'limit' || first.blocked === 'rate')) noteTts('eleven-' + first.blocked);
+      } else if (first && first.blocked === 'timeout') voiceSlow(first.reason || 'elevenlabs slow');
+      else if (first && (first.blocked === 'limit' || first.blocked === 'rate')) noteTts('eleven-' + first.blocked);
     }
-    const voiceName = cfg.geminiVoice || 'Sulafat';
-    const style = BrimSpeech.styleFor(cfg.style, line.emotion);
-    const result = await speaker.synthesize(text, voiceName, style);
-    paintGemini();
-    if (!result || result.blocked || !result.bytes) {
-      if (result && (result.blocked === 'limit' || result.blocked === 'rate')) noteTts(result.blocked);
+    if (localStorage.getItem(GEMINI_KEY) && left() > 250) {
+      const voiceName = cfg.geminiVoice || 'Sulafat';
+      const style = BrimSpeech.styleFor(cfg.style, line.emotion);
+      markLatency('tts-gemini', 'request');
+      const result = await speaker.synthesize(text, voiceName, style, { timeoutMs: left() });
+      paintGemini();
+      if (result && result.bytes) {
+        const ctx = playbackContext(line);
+        if (!ctx) return null;
+        try {
+          const buffer = await bytesToBuffer(ctx, result.bytes);
+          return { buffer, spoken: result.spoken };
+        } catch (e) { return null; }
+      }
+      if (result && result.blocked === 'timeout') voiceSlow(result.reason || 'gemini tts slow');
+      else if (result && (result.blocked === 'limit' || result.blocked === 'rate')) noteTts(result.blocked);
       return null;
     }
-    const ctx = playbackContext(line);
-    if (!ctx) return null;
-    try {
-      const buffer = await bytesToBuffer(ctx, result.bytes);
-      return { buffer, spoken: result.spoken };
-    } catch (e) { return null; }
+    return null;
   }
   async function speak(line) {
     const gen = speechGen;
@@ -639,6 +665,25 @@
   let recIntentional = false, lastRecError = '', lastCoachLine = '', pendingHeard = null;
   let recRestarts = [];
   let vadBlocked = false, armListen = false, track = null, spokeUntil = 0, audioFails = 0;
+  let interimTimer = 0;
+  function acceptHeard(said, how) {
+    const text = String(said || '').trim();
+    if (!text || gotResult) return;
+    clearTimeout(interimTimer);
+    const Vad = window.BrimVad;
+    const echoWindow = busy || (spokeUntil && Date.now() - spokeUntil < 1200);
+    if (echoWindow && Vad && Vad.isEcho(text, lastCoachLine)) {
+      setStatus('error', 'That matched Aria. Say your own line.');
+      return;
+    }
+    gotResult = true;
+    misses = 0;
+    audioFails = 0;
+    pendingHeard = { start: recStartedAt || (Date.now() - 800), end: Date.now() };
+    markLatency('stt-end', how || 'recognition final');
+    setStatus('heard', text);
+    send(text);
+  }
   function handsFreeOn() { return !!($('auto') && $('auto').checked); }
   function useEnergyVad() {
     return !vadBlocked && window.BrimVad && BrimVad.allowEnergyStream(navigator.userAgent || '', handsFreeOn());
@@ -766,17 +811,21 @@
     if (aria) aria.textContent = text;
   }
   async function play(lines) {
-    const spoken = offerTracks(lines && lines.length ? lines : [{ speaker: 'aria', text: 'I heard you. Tell me what you want to practice.' }]);
+    const spoken = offerTracks(lines && lines.length ? lines : [{ speaker: 'aria', text: 'I heard you. Tell me what you want to practice.' }]).map(present);
     const id = ++playId;
     busy = true; stopSpeaking = false; ttsOnset = 0;
     if (!handsFreeOn()) stopListening();
+    browserToken++;
+    if (synth) { try { synth.cancel(); } catch (e) {} }
+    spoken.forEach(shown => {
+      if (shown && shown.speaker !== 'user') lastCoachLine = shown.text || '';
+      show(shown);
+      setCaption(shown);
+    });
     setStatus('speaking', spoken[0] && spoken[0].text);
     try {
-      for (const l of spoken) {
-        const shown = present(l);
-        if (shown && shown.speaker !== 'user') lastCoachLine = shown.text || '';
-        show(shown); setCaption(shown);
-        if (l.emotion && face) face.react(l.emotion);
+      for (const shown of spoken) {
+        if (shown.emotion && face) face.react(shown.emotion);
         setAvatarState('speaking', { speaker: shown.speaker });
         if (id !== playId) return;
         await speak(shown);
@@ -886,6 +935,12 @@
     interrupt();
     show({ speaker: 'user', text: value });
     setStatus('heard', value);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    setStatus('thinking');
+    if ((localStorage.getItem(GEMINI_KEY) || localStorage.getItem(ELEVEN_KEY)) && synth) {
+      markLatency('ack', 'One moment');
+      speakChunk('One moment.', null, 1, 1, null);
+    }
     if (leavesTrack(value)) track = null;
     else if (isTrackCommand(value) || track) {
       try {
@@ -1146,20 +1201,11 @@
         const words = interim.trim().split(/\s+/).filter(Boolean);
         if (words.length >= 2 && !(Vad && Vad.isEcho(interim, lastCoachLine))) interrupt();
       }
-      const said = finalText.trim();
-      if (!said) return;
-      const echoWindow = busy || (spokeUntil && Date.now() - spokeUntil < 1200);
-      if (echoWindow && Vad && Vad.isEcho(said, lastCoachLine)) {
-        setStatus('error', 'That matched Aria. Say your own line.');
-        return;
-      }
-      gotResult = true;
-      misses = 0;
-      audioFails = 0;
-      pendingHeard = { start: recStartedAt || (Date.now() - 800), end: Date.now() };
-      markLatency('stt-end', 'recognition final');
-      setStatus('heard', said);
-      send(said);
+      if (finalText.trim()) { acceptHeard(finalText, 'recognition final'); return; }
+      const snap = interim.trim();
+      if (snap.split(/\s+/).filter(Boolean).length < 2) return;
+      clearTimeout(interimTimer);
+      interimTimer = setTimeout(() => acceptHeard(snap, 'stable interim'), 1200);
     };
     rec.onend = () => {
       listening = false;
@@ -1230,6 +1276,7 @@
     }
   }
   function stopListening() {
+    clearTimeout(interimTimer);
     if (!(rec && listening)) return;
     recIntentional = true;
     try { rec.abort(); } catch (e) {}
